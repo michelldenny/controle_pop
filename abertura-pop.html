@@ -1,0 +1,1672 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de POP - Moderno</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bibliotecas PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#4f46e5', // Indigo 600
+                        primaryHover: '#4338ca', // Indigo 700
+                        secondary: '#f3f4f6', // Gray 100
+                        surface: '#ffffff',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Scrollbar suave */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c7c7c7;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* Estilização Moderna dos Inputs */
+        .modern-input {
+            transition: all 0.2s ease-in-out;
+            border: 1px solid #e5e7eb;
+        }
+        .modern-input:focus {
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+            outline: none;
+        }
+
+        /* Solução para o Logo - Card Branco Flutuante (NA TELA) */
+        .logo-badge {
+            background: white;
+            padding: 1rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            border: 1px solid #f3f4f6;
+        }
+        .logo-badge img {
+            max-height: 80px;
+            width: auto;
+            display: block;
+        }
+
+        /* Cards de Seção */
+        .form-section {
+            background: white;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(229, 231, 235, 0.5);
+        }
+        
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid #f3f4f6;
+            color: #4f46e5;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        /* Upload Box Moderno */
+        .file-upload-box {
+            border: 2px dashed #e5e7eb;
+            border-radius: 0.75rem;
+            transition: all 0.2s;
+            background: #f9fafb;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .file-upload-box:hover {
+            border-color: #4f46e5;
+            background: #eef2ff;
+        }
+        .file-upload-box img {
+            max-height: 120px;
+            width: 100%;
+            object-fit: contain;
+        }
+
+        /* Radio Buttons transformados em Chips */
+        .radio-chip-group {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .radio-chip {
+            cursor: pointer;
+        }
+        .radio-chip input[type="radio"] {
+            display: none;
+        }
+        .radio-chip-label {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 9999px; /* Pill shape */
+            background: white;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #4b5563;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .radio-chip input[type="radio"]:checked + .radio-chip-label {
+            background-color: #4f46e5;
+            border-color: #4f46e5;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
+        }
+        .radio-chip:hover .radio-chip-label {
+            border-color: #d1d5db;
+            background-color: #f9fafb;
+        }
+        .radio-chip input[type="radio"]:checked:hover + .radio-chip-label {
+            background-color: #4338ca;
+            border-color: #4338ca;
+        }
+
+        /* Botões Principais */
+        .btn-modern-primary {
+            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+            color: white;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .btn-modern-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.4);
+        }
+        .btn-modern-primary:active {
+            transform: translateY(0);
+        }
+
+        /* =========================================
+           NOVOS ESTILOS DO PDF (CLEAN & ROBUSTO)
+           ========================================= */
+        .pdf-preview {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            background: white;
+            display: none; /* Escondido por padrão */
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .pdf-page {
+            width: 210mm;
+            height: 297mm;
+            padding: 5mm 15mm; /* Margens seguras */
+            position: relative;
+            background: #ffffff;
+            color: #000000;
+            box-sizing: border-box;
+            overflow: hidden; /* Evita quebras indesejadas */
+        }
+
+        /* Header Clean */
+        .pdf-clean-header {
+            width: 100%;
+            height: 35mm; /* Altura fixa para evitar pulos */
+            border-bottom: 2pt solid #4f46e5;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8mm;
+            background: white; /* Garante que o JPG fique em fundo branco */
+        }
+        .pdf-logo-box {
+            width: 60mm;
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+        .pdf-logo-box img {
+            max-height: 30mm;
+            max-width: 100%;
+            object-fit: contain;
+        }
+        .pdf-header-info {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .pdf-header-title {
+            font-size: 14pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #111827;
+            line-height: 1.2;
+            letter-spacing: -0.5px;
+        }
+        .pdf-header-subtitle {
+            font-size: 9pt;
+            color: #6b7280;
+            text-transform: uppercase;
+            font-weight: 500;
+            margin-bottom: 2mm;
+        }
+        .pdf-tag {
+            background-color: #f3f4f6;
+            color: #374151;
+            padding: 1mm 3mm 4mm 3mm;
+            border-radius: 4px;
+            font-size: 8pt;
+            font-weight: 700;         /* Remove altura de linha extra */
+            display: inline-flex;   /* Mudou de inline-block */
+            align-items: center;    /* Centraliza verticalmente */
+            align-self: flex-end;   
+            line-height: 1;         /* Remove altura de linha extra */
+        }
+
+        /* Seções */
+        .pdf-section-title {
+            font-size: 17pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #4f46e5;
+            border-bottom: 1pt solid #e5e7eb;
+            margin-bottom: 3mm;
+            margin-top: 12mm; /* AUMENTADO: Espaço entre o fim do bloco anterior e o título */
+            padding-bottom: 1mm;
+            letter-spacing: 0.5px;
+        }
+
+        /* Grid System Robusto (Display Table ou Flex fixo para evitar bugs do html2canvas) */
+        .pdf-row {
+            display: flex;
+            flex-wrap: wrap;
+            margin-bottom: 4mm;
+            width: 100%;
+            gap: 4mm; /* Espaçamento consistente */
+        }
+        
+        .pdf-col-1 { width: calc(100%); }
+        .pdf-col-2 { width: calc(50% - 2mm); }
+        .pdf-col-3 { width: calc(33.33% - 2.7mm); }
+        .pdf-col-4 { width: calc(25% - 3mm); }
+
+        /* Componente de Campo (Label + Valor) */
+        .pdf-field {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 2mm;
+        }
+        .pdf-label {
+            font-size: 7pt;
+            color: #6b7280;
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 0.5mm;
+            letter-spacing: 0.3px;
+        }
+        .pdf-value {
+            font-size: 10pt; /* Tamanho legível */
+            color: #111827;
+            font-weight: 600;
+            background: transparent;
+            min-height: 5mm;
+            
+        }
+
+        /* Foto Container */
+        .pdf-photo-box {
+            width: 100%;
+            height: 90mm; /* Altura fixa */
+            background: #f9fafb;
+            border: 1pt solid #e5e7eb;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 5mm;
+            overflow: hidden;
+        }
+        .pdf-photo-box img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        /* Grid de 4 Fotos */
+        .pdf-photo-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4mm;
+        }
+        .pdf-photo-card {
+            width: calc(50% - 2mm);
+            background: #ffffff;
+            border: 1pt solid #e5e7eb;
+            border-radius: 6px;
+            padding: 2mm;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .pdf-photo-card img {
+            width: 100%;
+            height: 60mm;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 2mm;
+            background: #f3f4f6;
+        }
+        .pdf-photo-caption {
+            font-size: 7pt;
+            font-weight: 700;
+            color: #4b5563;
+            text-transform: uppercase;
+        }
+
+        /* Tabela Checklist Clean */
+        .pdf-table-clean {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+        }
+        .pdf-table-clean th {
+            text-align: left;
+            padding: 2mm;
+            color: #6b7280;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 6pt;
+            border-bottom: 1pt solid #e5e7eb;
+        }
+        .pdf-table-clean td {
+            padding: 2mm;
+            border-bottom: 0.5pt solid #f3f4f6;
+            color: #374151;
+            vertical-align: middle;
+        }
+        .pdf-table-clean td.center { text-align: center; }
+        
+        .pdf-check-dot {
+            height: 3mm;
+            width: 3mm;
+            background-color: #4f46e5;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        /* Caixa de Texto Relatório */
+        .pdf-report-box {
+            width: 100%;
+            min-height: 30mm;
+            border: 1pt dashed #d1d5db;
+            background: #fcfcfc;
+            border-radius: 6px;
+            padding: 4mm;
+            font-size: 9pt;
+            line-height: 1.4;
+            color: #374151;
+            margin-top: 2mm;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto">
+        <!-- Header Centralizado da Aplicação -->
+        <div class="text-center mb-8">
+            <div class="logo-badge">
+                <img id="form-logo" src="https://i.postimg.cc/66bT3phm/LOGO-SP.jpg" alt="Logotipo da Subprefeitura de São Paulo">
+            </div>
+            <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">
+                <span class="bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-600">
+                    Gerador de POP
+                </span>
+            </h1>
+            <p class="mt-2 text-gray-600">Sistema de Apreensão de Veículos Abandonados</p>
+        </div>
+
+        <form id="documentForm" class="space-y-6">
+            
+            <!-- SEÇÃO 1: Identificação Básica -->
+            <div class="form-section">
+                <div class="section-header">
+                    <i class="fas fa-info-circle mr-3"></i> Identificação
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-group">
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="subName">Subprefeitura</label>
+                        <select id="subName" required class="modern-input w-full rounded-lg px-4 py-2.5 bg-white">
+                            <option value="">Selecione...</option>
+                            <option value="SUB-AD">SUB-AD</option>
+                            <option value="SUB-AF">SUB-AF</option>
+                            <option value="SUB-BT">SUB-BT</option>
+                            <option value="SUB-CL">SUB-CL</option>
+                            <option value="SUB-CS">SUB-CS</option>
+                            <option value="SUB-CT">SUB-CT</option>
+                            <option value="SUB-CV">SUB-CV</option>
+                            <option value="SUB-EM">SUB-EM</option>
+                            <option value="SUB-FB">SUB-FB</option>
+                            <option value="SUB-G">SUB-G</option>
+                            <option value="SUB-IP">SUB-IP</option>
+                            <option value="SUB-IQ">SUB-IQ</option>
+                            <option value="SUB-IT">SUB-IT</option>
+                            <option value="SUB-JA">SUB-JA</option>
+                            <option value="SUB-JT">SUB-JT</option>
+                            <option value="SUB-LA">SUB-LA</option>
+                            <option value="SUB-MB">SUB-MB</option>
+                            <option value="SUB-MG">SUB-MG</option>
+                            <option value="SUB-MO">SUB-MO</option>
+                            <option value="SUB-MP">SUB-MP</option>
+                            <option value="SUB-PA">SUB-PA</option>
+                            <option value="SUB-PE">SUB-PE</option>
+                            <option value="SUB-PI">SUB-PI</option>
+                            <option value="SUB-PJ">SUB-PJ</option>
+                            <option value="SUB-PR">SUB-PR</option>
+                            <option value="SUB-SA">SUB-SA</option>
+                            <option value="SUB-SB">SUB-SB</option>
+                            <option value="SUB-SE">SUB-SE</option>
+                            <option value="SUB-SM">SUB-SM</option>
+                            <option value="SUB-ST">SUB-ST</option>
+                            <option value="SUB-VM">SUB-VM</option>
+                            <option value="SUB-VP">SUB-VP</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="popNumber">Nº do POP</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 font-bold">#</span>
+                            </div>
+                            <input type="text" id="popNumber" placeholder="Ex: 123" required class="modern-input w-full rounded-lg pl-8 pr-4 py-2.5">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 2: Dados do Veículo -->
+            <div class="form-section">
+                <div class="section-header">
+                    <i class="fas fa-car mr-3"></i> Dados do Veículo
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="brand">Marca</label>
+                        <select id="brand" required class="modern-input w-full rounded-lg px-4 py-2.5 bg-white">
+                            <option value="">Selecione...</option>
+			    <option value="ALFA ROMEO">ALFA ROMEO</option>
+                            <option value="AUDI">AUDI</option>
+                            <option value="BMW">BMW</option>
+                            <option value="BYD">BYD</option>
+                            <option value="CAOA CHERY">CAOA CHERY</option>
+                            <option value="CHEVROLET">CHEVROLET</option>
+                            <option value="CHRYSLER">CHRYSLER</option>
+                            <option value="CITROËN">CITROËN</option>
+                            <option value="DODGE">DODGE</option>
+                            <option value="FIAT">FIAT</option>
+                            <option value="FORD">FORD</option>
+                            <option value="HONDA">HONDA</option>
+                            <option value="HYUNDAI">HYUNDAI</option>
+                            <option value="JAC">JAC</option>
+                            <option value="JEEP">JEEP</option>
+                            <option value="KIA">KIA</option>
+                            <option value="LAND ROVER">LAND ROVER</option>
+                            <option value="MERCEDES-BENZ">MERCEDES-BENZ</option>
+                            <option value="MITSUBISHI">MITSUBISHI</option>
+                            <option value="NISSAN">NISSAN</option>
+                            <option value="PEUGEOT">PEUGEOT</option>
+                            <option value="RENAULT">RENAULT</option>
+                            <option value="SUBARU">SUBARU</option>
+                            <option value="SUZUKI">SUZUKI</option>
+                            <option value="TOYOTA">TOYOTA</option>
+                            <option value="VOLKSWAGEN">VOLKSWAGEN</option>
+                            <option value="VOLVO">VOLVO</option>
+                            <option value="OUTROS">OUTROS</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="model">Modelo</label>
+                        <input type="text" id="model" placeholder="Ex: CARAVAN" required class="modern-input w-full rounded-lg px-4 py-2.5">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="plate">Placa</label>
+                        <input type="text" id="plate" placeholder="ABC-1234" required class="modern-input w-full rounded-lg px-4 py-2.5 uppercase">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="color">Cor</label>
+                        <input type="text" id="color" placeholder="Ex: VERDE" required class="modern-input w-full rounded-lg px-4 py-2.5">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="renavan">RENAVAM</label>
+                        <input type="text" id="renavan" placeholder="Somente números" class="modern-input w-full rounded-lg px-4 py-2.5">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="fuel">Combustível</label>
+                        <select id="fuel" class="modern-input w-full rounded-lg px-4 py-2.5 bg-white">
+                            <option value="GASOLINA">GASOLINA</option>
+                            <option value="ÁLCOOL">ÁLCOOL</option>
+                            <option value="DIESEL">DIESEL</option>
+                            <option value="ELÉTRICO">ELÉTRICO</option>
+                            <option value="ÁLCOOL/GASOLINA">ÁLCOOL/GASOLINA</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Classificação -->
+                    <div class="col-span-full border-t border-gray-100 mt-2 pt-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1" for="species">Espécie</label>
+                                <select id="species" required class="modern-input w-full rounded-lg px-4 py-2.5 bg-white">
+                                    <option value="PASSAGEIROS" selected>PASSAGEIROS</option>
+                                    <option value="CARGA">CARGA</option>
+                                    <option value="MISTO">MISTO</option>
+                                    <option value="COMPETIÇÃO">COMPETIÇÃO</option>
+                                    <option value="TRAÇÃO">TRAÇÃO</option>
+                                    <option value="ESPECIAL">ESPECIAL</option>
+                                    <option value="COLEÇÃO">COLEÇÃO</option>
+                                </select>
+                            </div>
+                            <div id="typeGroup">
+                                <label class="block text-sm font-medium text-gray-700 mb-1" for="typeSelect">Tipo</label>
+                                <select id="typeSelect" class="modern-input w-full rounded-lg px-4 py-2.5 bg-white"></select>
+                                <input type="text" id="typeManualInput" class="hidden modern-input w-full rounded-lg px-4 py-2.5" placeholder="Digite o tipo">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1" for="category">Categoria</label>
+                                <select id="category" class="modern-input w-full rounded-lg px-4 py-2.5 bg-white">
+                                    <option value="PARTICULAR">PARTICULAR</option>
+                                    <option value="COMERCIAL">COMERCIAL</option>
+                                    <option value="OFICIAL">OFICIAL</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 3: Localização -->
+            <div class="form-section">
+                <div class="section-header">
+                    <i class="fas fa-map-marker-alt mr-3"></i> Localização e Datas
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="street">Rua</label>
+                        <input type="text" id="street" placeholder="Nome da rua" required class="modern-input w-full rounded-lg px-4 py-2.5">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="number">Número</label>
+                        <input type="text" id="number" placeholder="Nº 123" required class="modern-input w-full rounded-lg px-4 py-2.5">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="neighborhood">Bairro</label>
+                        <input type="text" id="neighborhood" placeholder="Bairro" required class="modern-input w-full rounded-lg px-4 py-2.5">
+                    </div>
+                    
+                    <!-- Datas Grid -->
+                    <div class="col-span-full grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1" for="dateAdhered">Adesivado em</label>
+                            <input type="date" id="dateAdhered" required class="modern-input w-full rounded-lg px-2 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1" for="dateFirstInspection">1ª Vistoria</label>
+                            <input type="date" id="dateFirstInspection" class="modern-input w-full rounded-lg px-2 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1" for="dateIntimation">Intimação</label>
+                            <input type="date" id="dateIntimation" class="modern-input w-full rounded-lg px-2 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1" for="dateApprehension">Apreensão</label>
+                            <input type="date" id="dateApprehension" class="modern-input w-full rounded-lg px-2 py-2 text-sm">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 4: Detalhes Administrativos -->
+            <div class="form-section">
+                <div class="section-header">
+                    <i class="fas fa-folder-open mr-3"></i> Detalhes Administrativos
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="apprehensionReason">Motivo da Apreensão</label>
+                        <textarea id="apprehensionReason" required class="modern-input w-full rounded-lg px-4 py-2.5 h-20" spellcheck="false">VEÍCULO ABANDONADO EM VIA PÚBLICA</textarea>
+                    </div>
+                    
+                    <!-- Chips para Sucata -->
+                    <div class="flex flex-col justify-center">
+                        <span class="block text-sm font-medium text-gray-700 mb-2">O veículo é sucata?</span>
+                        <div class="radio-chip-group">
+                            <label class="radio-chip">
+                                <input type="radio" id="scrapYes" name="scrap" value="Sim">
+                                <span class="radio-chip-label"><i class="fas fa-check mr-2"></i>Sim</span>
+                            </label>
+                            <label class="radio-chip">
+                                <input type="radio" id="scrapNo" name="scrap" value="Não" checked>
+                                <span class="radio-chip-label"><i class="fas fa-times mr-2"></i>Não</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Códigos -->
+                    <div class="md:col-span-2 grid grid-cols-3 gap-4">
+                         <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1" for="numeroDemanda">Nº Demanda</label>
+                            <input type="text" id="numeroDemanda" class="modern-input w-full rounded-lg px-3 py-2 text-sm">
+                         </div>
+                         <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1" for="sei">SEI</label>
+                            <input type="text" id="sei" class="modern-input w-full rounded-lg px-3 py-2 text-sm">
+                         </div>
+                         <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1" for="sigrc">SIGRC</label>
+                            <input type="text" id="sigrc" class="modern-input w-full rounded-lg px-3 py-2 text-sm">
+                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 5: Fotos -->
+            <div class="form-section">
+                <div class="section-header">
+                    <i class="fas fa-camera mr-3"></i> Registro Fotográfico
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="text-center">
+                        <label class="block text-xs font-bold text-gray-500 mb-2 uppercase">Frontal</label>
+                        <div class="file-upload-box p-2" onclick="document.getElementById('frontPhoto').click()">
+                            <input type="file" id="frontPhoto" accept="image/*" class="hidden" required>
+                            <div class="text-gray-400 py-4" id="frontPhotoPlaceholder">
+                                <i class="fas fa-plus-circle text-2xl mb-1"></i><br>Adicionar
+                            </div>
+                            <img id="frontPhotoPreview" class="hidden mx-auto rounded">
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <label class="block text-xs font-bold text-gray-500 mb-2 uppercase">Traseira</label>
+                        <div class="file-upload-box p-2" onclick="document.getElementById('rearPhoto').click()">
+                            <input type="file" id="rearPhoto" accept="image/*" class="hidden" required>
+                            <div class="text-gray-400 py-4" id="rearPhotoPlaceholder">
+                                <i class="fas fa-plus-circle text-2xl mb-1"></i><br>Adicionar
+                            </div>
+                            <img id="rearPhotoPreview" class="hidden mx-auto rounded">
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <label class="block text-xs font-bold text-gray-500 mb-2 uppercase">Lat. Direita</label>
+                        <div class="file-upload-box p-2" onclick="document.getElementById('rightSidePhoto').click()">
+                            <input type="file" id="rightSidePhoto" accept="image/*" class="hidden" required>
+                            <div class="text-gray-400 py-4" id="rightSidePhotoPlaceholder">
+                                <i class="fas fa-plus-circle text-2xl mb-1"></i><br>Adicionar
+                            </div>
+                            <img id="rightSidePhotoPreview" class="hidden mx-auto rounded">
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <label class="block text-xs font-bold text-gray-500 mb-2 uppercase">Lat. Esquerda</label>
+                        <div class="file-upload-box p-2" onclick="document.getElementById('leftSidePhoto').click()">
+                            <input type="file" id="leftSidePhoto" accept="image/*" class="hidden" required>
+                            <div class="text-gray-400 py-4" id="leftSidePhotoPlaceholder">
+                                <i class="fas fa-plus-circle text-2xl mb-1"></i><br>Adicionar
+                            </div>
+                            <img id="leftSidePhotoPreview" class="hidden mx-auto rounded">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 6: Estado e Checklists -->
+            <div class="form-section">
+                <div class="section-header">
+                    <i class="fas fa-clipboard-check mr-3"></i> Vistoria Detalhada
+                </div>
+                
+                <p class="text-sm text-gray-500 mb-6 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                    <i class="fas fa-info-circle mr-1"></i> Selecione a condição de cada item. Use o campo de texto para observações.
+                </p>
+
+                <div id="vehicle-condition-items" class="space-y-4">
+                    <!-- Itens gerados via JS -->
+                </div>
+
+                <div class="mt-8">
+                    <label class="block text-sm font-medium text-gray-700 mb-2" for="vehicleConditionGeneral">Relatório Geral</label>
+                    <textarea id="vehicleConditionGeneral" class="modern-input w-full rounded-lg px-4 py-3 h-24" placeholder="Descreva o estado geral do veículo, observando lataria, pneus, vidros, etc."></textarea>
+                </div>
+            </div>
+
+            <!-- Ações -->
+            <div class="sticky bottom-0 bg-white/90 backdrop-blur-md border-t border-gray-200 p-4 -mx-4 md:mx-0 md:rounded-xl md:static md:bg-transparent md:border-0 md:p-0 flex flex-col md:flex-row gap-4 items-center justify-between shadow-lg md:shadow-none z-10">
+                <button type="submit" class="btn-modern-primary w-full md:w-auto px-8 py-3 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center">
+                    <i class="fas fa-file-pdf mr-2"></i> Gerar POP
+                </button>
+
+                <div class="flex gap-2 w-full md:w-auto">
+                    <button type="button" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium flex-1 md:flex-none flex items-center justify-center" onclick="saveSettings()">
+                        <i class="fas fa-save mr-2"></i> Salvar
+                    </button>
+                    
+                    <input type="file" id="importFile" accept=".xml" class="hidden" onchange="importSettings(event)">
+                    <label for="importFile" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium cursor-pointer flex-1 md:flex-none flex items-center justify-center">
+                        <i class="fas fa-upload mr-2"></i> Importar
+                    </label>
+
+                    <button type="button" class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-700 font-medium flex-1 md:flex-none flex items-center justify-center" onclick="generateRemocaoPDF()">
+                        <i class="fas fa-truck-pickup mr-2"></i> Remoção
+                    </button>
+                </div>
+            </div>
+
+        </form>
+    </div>
+
+    <!-- 
+        ================================================================
+        ESTRUTURA DE PDF REFORMULADA (LAYOUT ESTÁVEL E CLEAN)
+        ================================================================
+    -->
+    <div id="pdf-content" class="pdf-preview">
+            
+            <!-- PAGINA 1 -->
+            <div class="pdf-page" id="pdf-page-1">
+                <!-- Header Clean -->
+                <div class="pdf-clean-header">
+                    <div class="pdf-logo-box">
+                        <img id="pdf-logo-p1" src="https://i.postimg.cc/66bT3phm/LOGO-SP.jpg" alt="Logo">
+                    </div>
+                    <div class="pdf-header-info">
+                        <div class="pdf-header-title">Supervisão de Fiscalização</div>
+                        <div class="pdf-header-subtitle">Apreensão de Veículos Abandonados em Via Pública</div>
+                        <div class="pdf-tag">
+                            <span id="pdf-sub-name-header-p1"></span> &nbsp;|&nbsp; POP Nº <span id="pdf-pop-number-header-p1"></span> &nbsp;|&nbsp; <span id="pdf-current-date-header-p1"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pdf-section-title">Identificação do Veículo</div>
+                
+                <div class="pdf-row">
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">Marca/Modelo</span>
+                        <div id="pdf-brand-model-p1" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">Placa</span>
+                        <div id="pdf-plate-p1" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">Cor</span>
+                        <div id="pdf-color-p1" class="pdf-value"></div>
+                    </div>
+                </div>
+                <div class="pdf-row">
+                     <div class="pdf-field pdf-col-1">
+                        <span class="pdf-label">Endereço / Localização</span>
+                        <div id="pdf-address-p1" class="pdf-value"></div>
+                    </div>
+                </div>
+
+                <div class="pdf-section-title">Foto Principal</div>
+                <div class="pdf-photo-box">
+                    <img id="pdf-front-image-p1" src="" alt="Foto Frontal Veículo">
+                </div>
+
+                <div class="pdf-section-title">Histórico de Datas</div>
+                <div class="pdf-row">
+                    <div class="pdf-field pdf-col-4">
+                        <span class="pdf-label">Adesivado em</span>
+                        <div id="pdf-date-adhered-p1" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-4">
+                        <span class="pdf-label">1ª Vistoria</span>
+                        <div id="pdf-date-first-inspection-p1" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-4">
+                        <span class="pdf-label">Intimação</span>
+                        <div id="pdf-date-intimation-p1" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-4">
+                        <span class="pdf-label">Apreensão</span>
+                        <div id="pdf-date-apprehension-p1" class="pdf-value"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGINA 2 -->
+            <div class="pdf-page" id="pdf-page-2">
+                 <div class="pdf-clean-header">
+                    <div class="pdf-logo-box">
+                        <img id="pdf-logo-p2" src="https://i.postimg.cc/66bT3phm/LOGO-SP.jpg" alt="Logo">
+                    </div>
+                    <div class="pdf-header-info">
+                        <div class="pdf-header-title">Registro Fotográfico</div>
+                        <div class="pdf-header-subtitle">Documentação Visual</div>
+                        <div class="pdf-tag">
+                            POP Nº <span id="pdf-pop-number-header-p2"></span> &nbsp;|&nbsp; <span id="pdf-sub-name-header-p2"></span> &nbsp;|&nbsp; <span id="pdf-current-date-header-p2"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AFASTAMENTO APLICADO AQUI -->
+                <div class="pdf-photo-grid" style="margin-top: 40mm;">
+                    <div class="pdf-photo-card">
+                        <img id="pdf-front-image-p2" src="" alt="Foto Frontal">
+                        <span class="pdf-photo-caption">Frontal</span>
+                    </div>
+                    <div class="pdf-photo-card">
+                        <img id="pdf-rear-image-p2" src="" alt="Foto Traseira">
+                        <span class="pdf-photo-caption">Traseira</span>
+                    </div>
+                    <div class="pdf-photo-card">
+                        <img id="pdf-right-side-image-p2" src="" alt="Foto Lateral Direita">
+                        <span class="pdf-photo-caption">Lateral Direita</span>
+                    </div>
+                    <div class="pdf-photo-card">
+                        <img id="pdf-left-side-image-p2" src="" alt="Foto Lateral Esquerda">
+                        <span class="pdf-photo-caption">Lateral Esquerda</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGINA 3 -->
+            <div class="pdf-page" id="pdf-page-3">
+                <div class="pdf-clean-header">
+                    <div class="pdf-logo-box">
+                        <img id="pdf-logo-p3" src="https://i.postimg.cc/66bT3phm/LOGO-SP.jpg" alt="Logo">
+                    </div>
+                    <div class="pdf-header-info">
+                        <div class="pdf-header-title">Detalhamento Técnico</div>
+                        <div class="pdf-header-subtitle">Dados Administrativos</div>
+                        <div class="pdf-tag">
+                             POP Nº <span id="pdf-pop-number-header-p3"></span> &nbsp;|&nbsp; <span id="pdf-sub-name-header-p3"></span> &nbsp;|&nbsp; <span id="pdf-current-date-header-p3"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pdf-section-title">Especificações do Veículo</div>
+
+                <div class="pdf-row">
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">Marca/Modelo</span>
+                        <div id="pdf-brand-model-p3" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">Placa</span>
+                        <div id="pdf-plate-p3" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">Cor</span>
+                        <div id="pdf-color-p3" class="pdf-value"></div>
+                    </div>
+                </div>
+                <div class="pdf-row">
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">Espécie/Tipo</span>
+                        <div id="pdf-species-p3" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">Categoria</span>
+                        <div id="pdf-category-p3" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">Combustível</span>
+                        <div id="pdf-fuel-p3" class="pdf-value"></div>
+                    </div>
+                </div>
+                <div class="pdf-row">
+                    <div class="pdf-field pdf-col-1">
+                        <span class="pdf-label">RENAVAM</span>
+                        <div id="pdf-renavan-p3" class="pdf-value"></div>
+                    </div>
+                </div>
+
+                <div class="pdf-section-title">Dados da Apreensão</div>
+                
+                <div class="pdf-row">
+                    <div class="pdf-field pdf-col-2">
+                        <span class="pdf-label">Data da Apreensão</span>
+                        <div id="pdf-date-apprehension-p3" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-2">
+                        <span class="pdf-label">Classificado como Sucata?</span>
+                        <div id="pdf-scrap-p3" class="pdf-value"></div>
+                    </div>
+                </div>
+                <div class="pdf-row">
+                    <div class="pdf-field pdf-col-1">
+                        <span class="pdf-label">Local da Apreensão</span>
+                        <div id="pdf-local-aprehension-p3" class="pdf-value"></div>
+                    </div>
+                </div>
+                <div class="pdf-row">
+                    <div class="pdf-field pdf-col-1">
+                        <span class="pdf-label">Motivo da Apreensão</span>
+                        <div id="pdf-apprehension-reason-p3" class="pdf-value"></div>
+                    </div>
+                </div>
+                
+                <div class="pdf-section-title">Controle Interno</div>
+                <div class="pdf-row">
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">Nº da Demanda</span>
+                        <div id="pdf-numero-demanda-p3" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">SEI</span>
+                        <div id="pdf-sei-p3" class="pdf-value"></div>
+                    </div>
+                    <div class="pdf-field pdf-col-3">
+                        <span class="pdf-label">SIGRC</span>
+                        <div id="pdf-sigrc-p3" class="pdf-value"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGINA 4 -->
+            <div class="pdf-page" id="pdf-page-4">
+                <div class="pdf-clean-header">
+                    <div class="pdf-logo-box">
+                        <img id="pdf-logo-p4" src="https://i.postimg.cc/66bT3phm/LOGO-SP.jpg" alt="Logo">
+                    </div>
+                    <div class="pdf-header-info">
+                        <div class="pdf-header-title">Laudo de Estado</div>
+                        <div class="pdf-header-subtitle">Checklist de Integridade</div>
+                        <div class="pdf-tag">
+                             POP Nº <span id="pdf-pop-number-header-p4"></span> &nbsp;|&nbsp; <span id="pdf-sub-name-header-p4"></span> &nbsp;|&nbsp; <span id="pdf-current-date-header-p4"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pdf-section-title">Tabela de Vistoria</div>
+                
+                <table class="pdf-table-clean" id="pdf-condition-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 30%;">Item</th>
+                            <th class="center" style="width: 10%;">Ótimo</th>
+                            <th class="center" style="width: 10%;">Bom</th>
+                            <th class="center" style="width: 10%;">Regular</th>
+                            <th class="center" style="width: 10%;">Péssimo</th>
+                            <th class="center" style="width: 10%;">N/A</th>
+                            <th style="width: 20%;">Observação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Preenchido via JS -->
+                    </tbody>
+                </table>
+                
+                <div class="pdf-section-title" style="margin-top: 10mm;">Relatório Geral</div>
+                <div class="pdf-report-box">
+                    <span id="pdf-vehicle-condition-general-p4"></span>
+                </div>
+            </div>
+    </div>
+
+    <!-- PDF Template 2 (Remoção) - Mesma estrutura Clean -->
+    <div id="pdf-content-2" class="pdf-preview">
+        <div class="pdf-page" id="pdf-page-5">
+            <!-- Header Unificado -->
+            <div class="pdf-clean-header">
+                <div class="pdf-logo-box">
+                    <img src="https://i.postimg.cc/66bT3phm/LOGO-SP.jpg" alt="Logo">
+                </div>
+                <div class="pdf-header-info">
+                    <div class="pdf-header-title">Auto de Remoção</div>
+                    <div class="pdf-header-subtitle">Vistoria e Custódia</div>
+                    <div class="pdf-tag">
+                        <span id="pdf-sub-name-2"></span> &nbsp;|&nbsp; <span id="pdf-date-apreensao-2"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pdf-section-title">Identificação</div>
+            <div class="pdf-row">
+                <div class="pdf-field pdf-col-2">
+                    <span class="pdf-label">Placa</span>
+                    <div id="pdf-placa-2" class="pdf-value"></div>
+                </div>
+                <div class="pdf-field pdf-col-2">
+                    <span class="pdf-label">Marca/Modelo</span>
+                    <div id="pdf-marca-modelo-2" class="pdf-value"></div>
+                </div>
+            </div>
+            <div class="pdf-row">
+                 <div class="pdf-field pdf-col-2">
+                    <span class="pdf-label">Cor / Combustível</span>
+                    <div id="pdf-cor-combustivel-2" class="pdf-value"></div>
+                </div>
+                <div class="pdf-field pdf-col-2">
+                    <span class="pdf-label">RENAVAM</span>
+                    <div id="pdf-renavan-2" class="pdf-value"></div>
+                </div>
+            </div>
+             <div class="pdf-row">
+                 <div class="pdf-field pdf-col-2">
+                    <span class="pdf-label">Chassi</span>
+                    <div id="pdf-chassi-2" class="pdf-value"></div>
+                </div>
+                 <div class="pdf-field pdf-col-2">
+                    <span class="pdf-label">Decalque Motor</span>
+                    <div id="pdf-decalque-2" class="pdf-value"></div>
+                </div>
+            </div>
+
+            <div class="pdf-section-title">Localização</div>
+            <div class="pdf-row">
+                <div class="pdf-field pdf-col-1">
+                    <span class="pdf-label">Local da Apreensão</span>
+                    <div id="pdf-local-apreensao-2" class="pdf-value"></div>
+                </div>
+            </div>
+
+            <div class="pdf-section-title">Responsáveis</div>
+            <div class="pdf-row">
+                <div class="pdf-field pdf-col-2">
+                    <span class="pdf-label">Fiscal Responsável</span>
+                    <div id="pdf-fiscal-responsavel-2" class="pdf-value"></div>
+                </div>
+                <div class="pdf-field pdf-col-2">
+                    <span class="pdf-label">RF</span>
+                    <div id="pdf-fiscal-rf-2" class="pdf-value"></div>
+                </div>
+            </div>
+            
+             <div class="pdf-section-title">Vias</div>
+             <div class="pdf-row" style="justify-content: space-around; margin-top: 10mm;">
+                 <div style="text-align: center; border: 1pt solid #ccc; padding: 5mm; width: 40mm; border-radius: 4px;">
+                     <div style="font-size: 8pt; color: #666; text-transform: uppercase;">Via<br>Subprefeitura</div>
+                     <div style="width: 5mm; height: 5mm; border: 1pt solid #000; margin: 2mm auto 0;"></div>
+                 </div>
+                 <div style="text-align: center; border: 1pt solid #ccc; padding: 5mm; width: 40mm; border-radius: 4px;">
+                     <div style="font-size: 8pt; color: #666; text-transform: uppercase;">Via<br>Pátio</div>
+                     <div style="width: 5mm; height: 5mm; border: 1pt solid #000; margin: 2mm auto 0;"></div>
+                 </div>
+             </div>
+        </div>
+
+        <div class="pdf-page" id="pdf-page-6">
+             <div class="pdf-clean-header">
+                <div class="pdf-logo-box">
+                    <img src="https://i.postimg.cc/66bT3phm/LOGO-SP.jpg" alt="Logo">
+                </div>
+                <div class="pdf-header-info">
+                    <div class="pdf-header-title">Auto de Remoção</div>
+                    <div class="pdf-header-subtitle">Continuação - Checklist</div>
+                    <div class="pdf-tag">
+                        <span id="pdf-sub-name-2-p2"></span> &nbsp;|&nbsp; <span id="pdf-date-apreensao-2-p2"></span>
+                    </div>
+                </div>
+            </div>
+
+            <table class="pdf-table-clean" id="pdf-condition-table-2">
+                <thead><tr><th style="width: 20%;">Itens</th><th style="width: 12%;">Ótimo</th><th style="width: 12%;">Bom</th><th style="width: 12%;">Regular</th><th style="width: 12%;">Péssimo</th><th style="width: 12%;">Não Tem</th><th style="width: 20%;">Observação</th></tr></thead>
+                <tbody></tbody>
+            </table>
+
+            <div class="pdf-report-box" style="margin-top: 5mm; min-height: 20mm;">
+                <div id="pdf-vehicle-condition-general-p6"></div>
+            </div>
+
+            <div class="pdf-section-title" style="margin-top: 10mm;">Assinaturas</div>
+            <div class="pdf-row">
+                <div class="pdf-col-2" style="border: 1pt solid #e5e7eb; padding: 3mm; border-radius: 4px;">
+                    <div style="font-size: 7pt; font-weight: 700; text-align: center; text-transform: uppercase; margin-bottom: 2mm;">Responsável Entrega (Subprefeitura)</div>
+                    <div style="border-bottom: 1pt solid #000; height: 8mm; margin-bottom: 2mm;"></div>
+                    <div style="font-size: 6pt;">Nome / RF</div>
+                </div>
+                 <div class="pdf-col-2" style="border: 1pt solid #e5e7eb; padding: 3mm; border-radius: 4px;">
+                    <div style="font-size: 7pt; font-weight: 700; text-align: center; text-transform: uppercase; margin-bottom: 2mm;">Responsável Recebimento (Pátio)</div>
+                    <div style="border-bottom: 1pt solid #000; height: 8mm; margin-bottom: 2mm;"></div>
+                    <div style="font-size: 6pt;">Nome / RF / Doc</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('documentForm');
+        const speciesSelect = document = document.getElementById('species');
+        const typeGroup = document.getElementById('typeGroup');
+        const typeSelect = document.getElementById('typeSelect');
+        const typeManualInput = document.getElementById('typeManualInput');
+        const popNumberInput = document.getElementById('popNumber');
+        const subNameSelect = document.getElementById('subName');
+
+        const typeOptions = {
+            'PASSAGEIROS': ["AUTOMÓVEIS", "ÔNIBUS", "MICRO-ÔNIBUS", "MOTOCICLETAS", "CICLOMOTORES", "MOTONETAS", "TRICICLOS", "QUADRICICLOS", "BICICLETAS", "CHARRETES", "BONDES"],
+            'CARGA': ["CAMINHÕES", "CAMINHONETES", "REBOQUES", "SEMIRREBOQUES", "CARROÇAS", "CARROS DE MÃO"]
+        };
+
+        function updateTypeOptions() {
+            const selectedSpecies = speciesSelect.value;
+            typeSelect.innerHTML = '';
+            typeManualInput.value = '';
+
+            if (typeOptions[selectedSpecies]) {
+                typeSelect.classList.remove('hidden');
+                typeManualInput.classList.add('hidden');
+                typeOptions[selectedSpecies].forEach(option => {
+                    const opt = document.createElement('option');
+                    opt.value = option;
+                    opt.textContent = option;
+                    typeSelect.appendChild(opt);
+                });
+            } else {
+                typeSelect.classList.add('hidden');
+                typeManualInput.classList.remove('hidden');
+            }
+        }
+
+        speciesSelect.addEventListener('change', updateTypeOptions);
+        updateTypeOptions();
+
+        const frontPhotoInput = document.getElementById('frontPhoto');
+        const rearPhotoInput = document.getElementById('rearPhoto');
+        const rightSidePhotoInput = document.getElementById('rightSidePhoto');
+        const leftSidePhotoInput = document.getElementById('leftSidePhoto');
+
+        const frontPhotoPreview = document.getElementById('frontPhotoPreview');
+        const rearPhotoPreview = document.getElementById('rearPhotoPreview');
+        const rightSidePhotoPreview = document.getElementById('rightSidePhotoPreview');
+        const leftSidePhotoPreview = document.getElementById('leftSidePhotoPreview');
+        const vehicleConditionItemsDiv = document.getElementById('vehicle-condition-items');
+
+        const vehicleConditionItems = [
+            'LATARIA', 'PORTA', 'VIDRO', 'FAROL', 'LANTERNA', 'RETROVISOR', 'MOTOR',
+            'RADIADOR', 'ESCAPAMENTO', 'BATERIA', 'RODA', 'PNEU', 'ACESSÓRIOS', 'PARTE INTERNA'
+        ];
+
+        function createConditionInputGroup(itemName) {
+            const normalizedName = itemName.toLowerCase().replace(/\s/g, '');
+            const conditions = ['ÓTIMO', 'BOM', 'REGULAR', 'PÉSSIMO', 'NÃO TEM'];
+            
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'border-b border-gray-100 pb-4 last:border-0';
+            
+            // Header: Item Name
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'flex justify-between items-center mb-2';
+            
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'font-semibold text-gray-800 text-sm uppercase';
+            titleSpan.textContent = itemName;
+            headerDiv.appendChild(titleSpan);
+            
+            // Input Obs (aparece alinhado ou embaixo em mobile)
+            const obsInput = document.createElement('input');
+            obsInput.type = 'text';
+            obsInput.id = `${normalizedName}-obs`;
+            obsInput.className = 'text-xs border-b border-gray-300 focus:border-indigo-500 outline-none px-2 py-1 w-1/2 md:w-1/3 bg-transparent transition-colors';
+            obsInput.placeholder = 'Observação (opcional)';
+            headerDiv.appendChild(obsInput);
+
+            groupDiv.appendChild(headerDiv);
+
+            // Radio Chips Container
+            const conditionsDiv = document.createElement('div');
+            conditionsDiv.className = 'flex flex-wrap gap-2';
+
+            conditions.forEach(condition => {
+                const conditionId = `${normalizedName}-${condition.toLowerCase().replace(/\s/g, '')}`;
+                
+                const label = document.createElement('label');
+                label.className = 'radio-chip';
+                
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = `condition-${normalizedName}`;
+                radio.value = condition;
+                radio.id = conditionId;
+                
+                const span = document.createElement('span');
+                span.className = 'radio-chip-label text-xs py-1 px-3';
+                span.textContent = condition;
+                
+                label.appendChild(radio);
+                label.appendChild(span);
+                conditionsDiv.appendChild(label);
+            });
+            
+            groupDiv.appendChild(conditionsDiv);
+            
+            return groupDiv;
+        }
+
+        vehicleConditionItems.forEach(item => {
+            const conditionGroup = createConditionInputGroup(item);
+            vehicleConditionItemsDiv.appendChild(conditionGroup);
+        });
+
+        function setupImageUpload(input, preview, placeholderId) {
+            input.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        preview.src = e.target.result;
+                        preview.classList.remove('hidden');
+                        if (placeholderId) {
+                            document.getElementById(placeholderId).classList.add('hidden');
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        setupImageUpload(frontPhotoInput, frontPhotoPreview, 'frontPhotoPlaceholder');
+        setupImageUpload(rearPhotoInput, rearPhotoPreview, 'rearPhotoPlaceholder');
+        setupImageUpload(rightSidePhotoInput, rightSidePhotoPreview, 'rightSidePhotoPlaceholder');
+        setupImageUpload(leftSidePhotoInput, leftSidePhotoPreview, 'leftSidePhotoPlaceholder');
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            generatePDF();
+        });
+
+        function formatDate(dateString) {
+            if (!dateString) return '_____ / _____ / __________';
+            const date = new Date(dateString + 'T00:00:00'); // Fix timezone issue
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day} / ${month} / ${year}`;
+        }
+
+        function getCurrentDate() {
+            const now = new Date();
+            const day = String(now.getDate()).padStart(2, '0');
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const year = now.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+        
+        function populatePDFContent() {
+            const subName = document.getElementById('subName').value;
+            const popNumber = document.getElementById('popNumber').value;
+            const brand = document.getElementById('brand').value;
+            const model = document.getElementById('model').value;
+            const plate = document.getElementById('plate').value;
+            const color = document.getElementById('color').value;
+            const species = document.getElementById('species').value;
+            const category = document.getElementById('category').value;
+            const fuel = document.getElementById('fuel').value;
+            const renavan = document.getElementById('renavan').value;
+            const street = document.getElementById('street').value;
+            const number = document.getElementById('number').value;
+            const neighborhood = document.getElementById('neighborhood').value;
+            const dateAdhered = document.getElementById('dateAdhered').value;
+            const dateFirstInspection = document.getElementById('dateFirstInspection').value;
+            const dateIntimation = document.getElementById('dateIntimation').value;
+            const dateApprehension = document.getElementById('dateApprehension').value;
+            const apprehensionReason = document.getElementById('apprehensionReason').value;
+            const scrap = document.querySelector('input[name="scrap"]:checked')?.value || '';
+            const numeroDemanda = document.getElementById('numeroDemanda').value;
+            const sei = document.getElementById('sei').value;
+            const sigrc = document.getElementById('sigrc').value;
+            const vehicleConditionGeneral = document.getElementById('vehicleConditionGeneral').value;
+            const typeValue = typeSelect.classList.contains('hidden') ? 
+                typeManualInput.value : typeSelect.value;
+            const logoSrc = document.getElementById('form-logo').src;
+            const currentDate = getCurrentDate();
+            
+            // Populate Headers
+            const pdfHeaders = {
+                'p1': { 'subName': 'pdf-sub-name-header-p1', 'popNumber': 'pdf-pop-number-header-p1', 'currentDate': 'pdf-current-date-header-p1' },
+                'p2': { 'subName': 'pdf-sub-name-header-p2', 'popNumber': 'pdf-pop-number-header-p2', 'currentDate': 'pdf-current-date-header-p2' },
+                'p3': { 'subName': 'pdf-sub-name-header-p3', 'popNumber': 'pdf-pop-number-header-p3', 'currentDate': 'pdf-current-date-header-p3' },
+                'p4': { 'subName': 'pdf-sub-name-header-p4', 'popNumber': 'pdf-pop-number-header-p4', 'currentDate': 'pdf-current-date-header-p4' }
+            };
+            
+            ['p1', 'p2', 'p3', 'p4'].forEach(p => {
+                const logoElement = document.getElementById(`pdf-logo-${p}`);
+                if (logoElement) logoElement.src = logoSrc;
+                if (document.getElementById(pdfHeaders[p].subName)) document.getElementById(pdfHeaders[p].subName).textContent = subName;
+                if (document.getElementById(pdfHeaders[p].popNumber)) document.getElementById(pdfHeaders[p].popNumber).textContent = popNumber;
+                if (document.getElementById(pdfHeaders[p].currentDate)) document.getElementById(pdfHeaders[p].currentDate).textContent = currentDate;
+            });
+
+            // Populate Fields
+            document.getElementById('pdf-brand-model-p1').textContent = `${brand} ${model}`;
+            document.getElementById('pdf-color-p1').textContent = color;
+            document.getElementById('pdf-plate-p1').textContent = plate;
+            document.getElementById('pdf-address-p1').textContent = `${street}, ${number} - ${neighborhood}`;
+            document.getElementById('pdf-date-adhered-p1').textContent = formatDate(dateAdhered);
+            document.getElementById('pdf-date-first-inspection-p1').textContent = formatDate(dateFirstInspection);
+            document.getElementById('pdf-date-intimation-p1').textContent = formatDate(dateIntimation);
+            document.getElementById('pdf-date-apprehension-p1').textContent = formatDate(dateApprehension);
+
+            if (frontPhotoPreview.src) {
+                document.getElementById('pdf-front-image-p1').src = frontPhotoPreview.src;
+                document.getElementById('pdf-front-image-p2').src = frontPhotoPreview.src;
+            }
+            if (rearPhotoPreview.src) document.getElementById('pdf-rear-image-p2').src = rearPhotoPreview.src;
+            if (rightSidePhotoPreview.src) document.getElementById('pdf-right-side-image-p2').src = rightSidePhotoPreview.src;
+            if (leftSidePhotoPreview.src) document.getElementById('pdf-left-side-image-p2').src = leftSidePhotoPreview.src;
+
+            document.getElementById('pdf-brand-model-p3').textContent = `${brand} ${model}`;
+            document.getElementById('pdf-plate-p3').textContent = plate;
+            document.getElementById('pdf-color-p3').textContent = color;
+            document.getElementById('pdf-species-p3').textContent = `${species}/${typeValue}`;
+            document.getElementById('pdf-category-p3').textContent = category;
+            document.getElementById('pdf-fuel-p3').textContent = fuel;
+            document.getElementById('pdf-renavan-p3').textContent = renavan;
+            document.getElementById('pdf-date-apprehension-p3').textContent = formatDate(dateApprehension);
+            document.getElementById('pdf-local-aprehension-p3').textContent = `${street}, ${number} - ${neighborhood}`;
+            document.getElementById('pdf-apprehension-reason-p3').textContent = apprehensionReason;
+            document.getElementById('pdf-scrap-p3').textContent = scrap;
+            document.getElementById('pdf-numero-demanda-p3').textContent = numeroDemanda;
+            document.getElementById('pdf-sei-p3').textContent = sei;
+            document.getElementById('pdf-sigrc-p3').textContent = sigrc;
+
+            const tableBody = document.querySelector('#pdf-condition-table tbody');
+            tableBody.innerHTML = '';
+            
+            vehicleConditionItems.forEach(item => {
+                const normalizedName = item.toLowerCase().replace(/\s/g, '');
+                const selectedCondition = document.querySelector(`input[name="condition-${normalizedName}"]:checked`);
+                const observation = document.getElementById(`${normalizedName}-obs`).value;
+                
+                // Simples checkmark visual clean
+                const check = '<span class="pdf-check-dot"></span>';
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td style="font-weight: 600;">${item}</td>
+                    <td class="center">${selectedCondition?.value === 'ÓTIMO' ? check : ''}</td>
+                    <td class="center">${selectedCondition?.value === 'BOM' ? check : ''}</td>
+                    <td class="center">${selectedCondition?.value === 'REGULAR' ? check : ''}</td>
+                    <td class="center">${selectedCondition?.value === 'PÉSSIMO' ? check : ''}</td>
+                    <td class="center">${selectedCondition?.value === 'NÃO TEM' ? check : ''}</td>
+                    <td><span class="pdf-obs-text">${observation}</span></td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            document.getElementById('pdf-vehicle-condition-general-p4').textContent = vehicleConditionGeneral;
+        }
+
+        async function generatePDF() {
+            populatePDFContent();
+            
+            const pdfContent = document.getElementById('pdf-content');
+            pdfContent.style.display = 'block'; // Block para não bagunçar o flex layout interno
+            
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = 210;
+            const pdfHeight = 297;
+            
+            try {
+                const pages = document.querySelectorAll('#pdf-page-1, #pdf-page-2, #pdf-page-3, #pdf-page-4');
+                
+                for (let i = 0; i < pages.length; i++) {
+                    const page = pages[i];
+                    const canvas = await html2canvas(page, {
+                        scale: 2, // Boa qualidade sem ser pesado demais
+                        useCORS: true,
+                        allowTaint: true,
+                        backgroundColor: '#ffffff'
+                    });
+                    
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                    
+                    if (i > 0) pdf.addPage();
+                    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                }
+                
+                const subName = subNameSelect.value;
+                const popNumber = popNumberInput.value;
+                const currentDate = new Date().toLocaleDateString('pt-BR').replace(/\//g, '_');
+                const filename = `${subName} - POP ${popNumber} - ${currentDate}.pdf`;
+                pdf.save(filename);
+
+                showModal('PDF gerado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao gerar PDF:', error);
+                showModal('Erro ao gerar PDF. Por favor, tente novamente.');
+            } finally {
+                pdfContent.style.display = 'none';
+            }
+        }
+
+        async function generateRemocaoPDF() {
+            populateRemocaoPDFContent();
+            
+            const pdfContent = document.getElementById('pdf-content-2');
+            if (!pdfContent) return;
+            pdfContent.style.display = 'block';
+            
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = 210;
+            const pdfHeight = 297;
+
+            const pages = document.querySelectorAll('#pdf-content-2 .pdf-page');
+            
+            for (let i = 0; i < pages.length; i++) {
+                const page = pages[i];
+                const canvas = await html2canvas(page, {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff'
+                });
+                
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                
+                if (i > 0) pdf.addPage();
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+            }
+
+            const subName = subNameSelect.value;
+            const popNumber = popNumberInput.value;
+            const filename = `AUTO DE REMOCAO ${subName} - POP ${popNumber}.pdf`;
+            pdf.save(filename);
+
+            pdfContent.style.display = 'none';
+        }
+
+        function populateRemocaoPDFContent() {
+            const subName = document.getElementById('subName').value;
+            const dateApprehension = document.getElementById('dateApprehension').value;
+            const plate = document.getElementById('plate').value;
+            const brand = document.getElementById('brand').value;
+            const model = document.getElementById('model').value;
+            const renavan = document.getElementById('renavan').value;
+            const color = document.getElementById('color').value;
+            const fuel = document.getElementById('fuel').value;
+            const street = document.getElementById('street').value;
+            const number = document.getElementById('number').value;
+            const neighborhood = document.getElementById('neighborhood').value;
+            const vehicleConditionGeneral = document.getElementById('vehicleConditionGeneral').value;
+
+            const tableBody = document.querySelector('#pdf-content-2 #pdf-condition-table-2 tbody');
+            const vehicleConditionGeneralP6 = document.getElementById('pdf-vehicle-condition-general-p6');
+            
+            if (!tableBody || !vehicleConditionGeneralP6) return;
+
+            tableBody.innerHTML = '';
+            
+            vehicleConditionItems.forEach(item => {
+                const normalizedName = item.toLowerCase().replace(/\s/g, '');
+                const selectedCondition = document.querySelector(`input[name="condition-${normalizedName}"]:checked`);
+                const observation = document.getElementById(`${normalizedName}-obs`).value;
+                
+                const check = '<span class="pdf-check-dot"></span>';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td style="text-align: left; padding-left: 2mm;">${item}</td>
+                    <td class="center">${selectedCondition?.value === 'ÓTIMO' ? check : ''}</td>
+                    <td class="center">${selectedCondition?.value === 'BOM' ? check : ''}</td>
+                    <td class="center">${selectedCondition?.value === 'REGULAR' ? check : ''}</td>
+                    <td class="center">${selectedCondition?.value === 'PÉSSIMO' ? check : ''}</td>
+                    <td class="center">${selectedCondition?.value === 'NÃO TEM' ? check : ''}</td>
+                    <td>${observation}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            if (document.getElementById('pdf-sub-name-2')) document.getElementById('pdf-sub-name-2').textContent = subName;
+            if (document.getElementById('pdf-date-apreensao-2')) document.getElementById('pdf-date-apreensao-2').textContent = formatDate(dateApprehension);
+            if (document.getElementById('pdf-placa-2')) document.getElementById('pdf-placa-2').textContent = plate;
+            if (document.getElementById('pdf-marca-modelo-2')) document.getElementById('pdf-marca-modelo-2').textContent = `${brand} ${model}`;
+            if (document.getElementById('pdf-renavan-2')) document.getElementById('pdf-renavan-2').textContent = renavan;
+            if (document.getElementById('pdf-cor-combustivel-2')) document.getElementById('pdf-cor-combustivel-2').textContent = `${color} / ${fuel}`;
+            if (document.getElementById('pdf-local-apreensao-2')) document.getElementById('pdf-local-apreensao-2').textContent = `${street}, ${number} - ${neighborhood}`;
+            if (document.getElementById('pdf-dados-proprietario-2')) document.getElementById('pdf-dados-proprietario-2').textContent = ""; 
+            if (document.getElementById('pdf-decalque-2')) document.getElementById('pdf-decalque-2').textContent = ""; 
+            if (document.getElementById('pdf-chassi-2')) document.getElementById('pdf-chassi-2').textContent = ""; 
+            if (document.getElementById('pdf-sub-name-2-p2')) document.getElementById('pdf-sub-name-2-p2').textContent = subName;
+            if (document.getElementById('pdf-date-apreensao-2-p2')) document.getElementById('pdf-date-apreensao-2-p2').textContent = formatDate(dateApprehension);
+
+            vehicleConditionGeneralP6.textContent = vehicleConditionGeneral;
+        }
+
+        function showModal(message) {
+            alert(message);
+        }
+
+        function saveSettings() {
+            const settings = {
+                subName: subNameSelect.value,
+                popNumber: popNumberInput.value,
+                brand: document.getElementById('brand').value,
+                model: document.getElementById('model').value,
+                plate: document.getElementById('plate').value,
+                color: document.getElementById('color').value,
+                species: speciesSelect.value,
+                type: typeSelect.classList.contains('hidden') ? typeManualInput.value : typeSelect.value,
+                category: document.getElementById('category').value,
+                fuel: document.getElementById('fuel').value,
+                renavan: document.getElementById('renavan').value,
+                street: document.getElementById('street').value,
+                number: document.getElementById('number').value,
+                neighborhood: document.getElementById('neighborhood').value,
+                dateAdhered: document.getElementById('dateAdhered').value,
+                dateFirstInspection: document.getElementById('dateFirstInspection').value,
+                dateIntimation: document.getElementById('dateIntimation').value,
+                dateApprehension: document.getElementById('dateApprehension').value,
+                apprehensionReason: document.getElementById('apprehensionReason').value,
+                scrap: document.querySelector('input[name="scrap"]:checked')?.value || 'Não',
+                numeroDemanda: document.getElementById('numeroDemanda').value,
+                sei: document.getElementById('sei').value,
+                sigrc: document.getElementById('sigrc').value,
+                vehicleConditionGeneral: document.getElementById('vehicleConditionGeneral').value,
+                conditions: []
+            };
+
+            vehicleConditionItems.forEach(item => {
+                const normalizedName = item.toLowerCase().replace(/\s/g, '');
+                const selectedCondition = document.querySelector(`input[name="condition-${normalizedName}"]:checked`);
+                const observation = document.getElementById(`${normalizedName}-obs`).value;
+                settings.conditions.push({
+                    item: item,
+                    condition: selectedCondition ? selectedCondition.value : '',
+                    observation: observation
+                });
+            });
+
+            const xmlString = `<settings>${Object.entries(settings).map(([key, value]) => {
+                if (key === 'conditions') {
+                    return `<${key}>${value.map(c => `<condition><item>${c.item}</item><status>${c.condition}</status><observation>${c.observation}</observation></condition>`).join('')}</${key}>`;
+                }
+                return `<${key}>${value}</${key}>`;
+            }).join('')}</settings>`;
+            
+            const blob = new Blob([xmlString], { type: 'text/xml' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'configuracoes_pop.xml';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function importSettings(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const xmlString = e.target.result;
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+                    const settings = {};
+
+                    xmlDoc.documentElement.childNodes.forEach(node => {
+                        if (node.nodeType === 1) { // ELEMENT_NODE
+                            if (node.tagName === 'conditions') {
+                                settings.conditions = Array.from(node.children).map(conditionNode => ({
+                                    item: conditionNode.querySelector('item').textContent,
+                                    condition: conditionNode.querySelector('status').textContent,
+                                    observation: conditionNode.querySelector('observation').textContent
+                                }));
+                            } else {
+                                settings[node.tagName] = node.textContent;
+                            }
+                        }
+                    });
+
+                    // Populate Fields
+                    subNameSelect.value = settings.subName || '';
+                    popNumberInput.value = settings.popNumber || '';
+                    document.getElementById('brand').value = settings.brand || '';
+                    document.getElementById('model').value = settings.model || '';
+                    document.getElementById('plate').value = settings.plate || '';
+                    document.getElementById('color').value = settings.color || '';
+                    speciesSelect.value = settings.species || '';
+                    
+                    if (typeOptions[settings.species]) {
+                        typeSelect.classList.remove('hidden');
+                        typeManualInput.classList.add('hidden');
+                        typeSelect.value = settings.type || '';
+                    } else {
+                        typeSelect.classList.add('hidden');
+                        typeManualInput.classList.remove('hidden');
+                        typeManualInput.value = settings.type || '';
+                    }
+                    
+                    document.getElementById('category').value = settings.category || '';
+                    document.getElementById('fuel').value = settings.fuel || '';
+                    document.getElementById('renavan').value = settings.renavan || '';
+                    document.getElementById('street').value = settings.street || '';
+                    document.getElementById('number').value = settings.number || '';
+                    document.getElementById('neighborhood').value = settings.neighborhood || '';
+                    document.getElementById('dateAdhered').value = settings.dateAdhered || '';
+                    document.getElementById('dateFirstInspection').value = settings.dateFirstInspection || '';
+                    document.getElementById('dateIntimation').value = settings.dateIntimation || '';
+                    document.getElementById('dateApprehension').value = settings.dateApprehension || '';
+                    document.getElementById('apprehensionReason').value = settings.apprehensionReason || '';
+                    
+                    const scrapRadio = document.querySelector(`input[name="scrap"][value="${settings.scrap}"]`);
+                    if (scrapRadio) scrapRadio.checked = true;
+
+                    document.getElementById('numeroDemanda').value = settings.numeroDemanda || '';
+                    document.getElementById('sei').value = settings.sei || '';
+                    document.getElementById('sigrc').value = settings.sigrc || '';
+                    document.getElementById('vehicleConditionGeneral').value = settings.vehicleConditionGeneral || '';
+                    
+                    if (settings.conditions) {
+                        settings.conditions.forEach(c => {
+                            const normalizedName = c.item.toLowerCase().replace(/\s/g, '');
+                            const radio = document.querySelector(`input[name="condition-${normalizedName}"][value="${c.condition}"]`);
+                            if (radio) radio.checked = true;
+                            document.getElementById(`${normalizedName}-obs`).value = c.observation || '';
+                        });
+                    }
+
+                    showModal('Configurações importadas com sucesso!');
+
+                } catch (error) {
+                    console.error('Erro ao importar configurações:', error);
+                    showModal('Erro ao importar. Verifique o arquivo XML.');
+                }
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>
