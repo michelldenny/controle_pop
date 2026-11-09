@@ -1,0 +1,2219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle de Veículos Apreendidos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=Oswald:wght@600;700&display=swap" rel="stylesheet">
+
+<!-- Biblioteca para leitura de arquivos Excel (.xlsx/.xls) e CSV -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<!-- Firebase SDKs Compat (Funcionam direto abrindo o arquivo localmente) -->
+<script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-auth-compat.js"></script>
+
+<style>
+  :root{
+    --bg: #EEF0EA;
+    --panel: #FFFFFF;
+    --ink: #1B2027;
+    --ink-soft: #5B6169;
+    --line: #DCDDD3;
+    --dark: #1B2027;
+    --dark-2: #262D36;
+    --amber: #E4A11B;
+    --amber-ink: #6B4A08;
+    --green: #2E7D5B;
+    --green-bg: #E5F1EA;
+    --red: #C0503A;
+    --red-bg: #FBE9E4;
+    --blue: #3B6E91;
+    --blue-bg: #E6EEF3;
+    --radius: 4px;
+    --font-head: 'Barlow Condensed', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-plate: 'Oswald', 'Barlow Condensed', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{ display:flex; min-height:100vh; }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width: 220px;
+    flex: 0 0 220px;
+    background: var(--dark);
+    color: #C9CDD4;
+    display:flex;
+    flex-direction:column;
+    padding: 22px 0;
+  }
+  .brand{
+    padding: 0 20px 20px 20px;
+    border-bottom: 1px solid #333B45;
+    margin-bottom: 14px;
+  }
+  .sidebar{ transition:width .2s ease, flex-basis .2s ease; }
+  .sidebar-toggle{
+    margin:0 12px 16px; align-self:flex-end; width:28px; height:28px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    background:var(--dark-2); color:var(--amber); border:1px solid #3E4651;
+    border-radius:var(--radius); font-size:20px; line-height:1;
+  }
+  .sidebar-toggle:focus-visible{ outline:2px solid var(--amber); outline-offset:3px; }
+  .sidebar.collapsed{ width:52px; flex-basis:52px; }
+  .sidebar.collapsed > :not(.sidebar-toggle){ display:none; }
+  .brand .tag{
+    font-family: var(--font-head);
+    font-weight:700;
+    font-size: 12px;
+    letter-spacing: .12em;
+    color: var(--amber);
+  }
+  .brand h1{
+    font-family: var(--font-head);
+    font-weight:600;
+    font-size: 26px;
+    line-height:1.05;
+    margin: 4px 0 0 0;
+    color: #F4F5F1;
+  }
+  .nav{ display:flex; flex-direction:column; gap:2px; padding: 6px 10px;}
+  .nav button{
+    all: unset;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    font-size: 14.5px;
+    font-weight: 500;
+    color: #C9CDD4;
+    border-left: 3px solid transparent;
+  }
+  .nav button .dot{
+    width:7px; height:7px; border-radius:50%; background:#4B5560; flex:0 0 auto;
+  }
+  .nav button:hover{ background: #262D36; color:#fff; }
+  .nav button.active{
+    background: #262D36;
+    color: #fff;
+    border-left: 3px solid var(--amber);
+  }
+  .nav button.active .dot{ background: var(--amber); }
+
+  .sidebar-foot{
+    margin-top:auto;
+    padding: 14px 20px 0 20px;
+    border-top: 1px solid #333B45;
+    font-size: 11.5px;
+    color: #7B828C;
+    line-height:1.5;
+  }
+  .cloud-status{
+    display:inline-flex; align-items:center; gap:6px; margin-bottom:4px;
+    font-weight:600; font-size:11.5px;
+  }
+  .cloud-status .dot-status{
+    width:8px; height:8px; border-radius:50%; background:#E4A11B; flex-shrink:0;
+  }
+  .cloud-status.connected{ color:#27AE60; }
+  .cloud-status.connected .dot-status{ background:#2ECC71; }
+  .cloud-status.error{ color:#E74C3C; }
+  .cloud-status.error .dot-status{ background:#E74C3C; }
+
+  /* ---------- Main ---------- */
+  .main{ flex:1; min-width:0; padding: 26px 30px 60px 30px; }
+  .pop-frame{ display:block; width:100%; height:100dvh; min-height:320px; border:0; }
+  .pop-frame[hidden]{ display:none; }
+  .topbar{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom: 20px; flex-wrap:wrap; gap:10px;
+  }
+  .topbar h2{
+    font-family: var(--font-head);
+    font-weight:600;
+    font-size: 30px;
+    margin: 0;
+  }
+  .topbar p{ margin:2px 0 0 0; color:var(--ink-soft); font-size:13.5px;}
+  
+  /* Botões Padronizados */
+  .btn{
+    all:unset; cursor:pointer;
+    font-family: var(--font-body);
+    font-weight:600;
+    font-size: 13px;
+    padding: 9px 15px;
+    border-radius: var(--radius);
+    background: var(--dark);
+    color: #fff;
+    border: 1px solid var(--dark);
+    display:inline-flex; align-items:center; gap:7px;
+    white-space:nowrap;
+    line-height:1;
+    box-sizing:border-box;
+  }
+  .btn:hover{ background:#0F1216; }
+  .btn.amber{ background:var(--amber); border-color:var(--amber); color:#2A1E00;}
+  .btn.amber:hover{ background:#D4931A; }
+  .btn.ghost{ background:transparent; color: var(--ink); border:1px solid var(--line); }
+  .btn.ghost:hover{ background:#fff; }
+  .btn.small{ padding:6px 10px; font-size:12px; }
+  .btn.danger{ background:transparent; color:var(--red); border:1px solid var(--red-bg);}
+  .btn.danger:hover{ background:var(--red-bg); }
+  .btn.filter-active{ background: #D9381E; color:#fff; border-color:#D9381E; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+  
+  /* Trava o tamanho de QUALQUER ícone SVG dentro dos botões */
+  .btn svg{
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    stroke-width: 2.2;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  /* ---------- Cards ---------- */
+  .cards{
+    display:grid; gap:14px;
+    grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
+    margin-bottom: 22px;
+  }
+  .card{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--dark);
+    border-radius: var(--radius);
+    padding: 16px 16px 14px 16px;
+  }
+  .card.c-amber{ border-left-color: var(--amber); }
+  .card.c-green{ border-left-color: var(--green); }
+  .card.c-red{ border-left-color: var(--red); }
+  .card.c-blue{ border-left-color: var(--blue); }
+  .card.c-purple{ border-left-color: #8E44AD; }
+  .card .label{
+    font-size: 12px; color: var(--ink-soft); font-weight:600;
+    text-transform: uppercase; letter-spacing:.04em;
+  }
+  .card .value{
+    font-family: var(--font-head); font-weight:700; font-size: 38px; line-height:1.1; margin-top:4px;
+  }
+  .card .sub{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+
+  /* ---------- Panels / sections ---------- */
+  .panel{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: 18px;
+  }
+  .panel h3{
+    font-family: var(--font-head); font-weight:600; font-size:19px; margin:0 0 12px 0;
+  }
+  .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:24px; }
+  @media (max-width: 980px){
+    .grid2{ grid-template-columns:1fr; }
+    .sidebar:not(.collapsed){ position:fixed; inset:0 auto 0 0; z-index:800; box-shadow:4px 0 20px rgba(0,0,0,.2); }
+    .main{ padding:20px 16px 40px; }
+  }
+
+  /* bar chart */
+  .barlist{ display:flex; flex-direction:column; gap:9px; }
+  .barrow{ display:grid; grid-template-columns: 130px 1fr 42px; align-items:center; gap:8px; font-size:12.5px;}
+  .barrow .barname{ color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .bartrack{ background:#EEEFEA; border-radius:2px; height:10px; overflow:hidden;}
+  .barfill{ height:100%; background: var(--dark); }
+  .barrow .barcount{ text-align:right; font-family:var(--font-body); font-weight:600; font-size:12px;}
+
+  /* ---------- Forms ---------- */
+  label{ display:block; font-size:12.5px; font-weight:600; color:var(--ink-soft); margin-bottom:5px; }
+  input[type=text], input[type=date], select, textarea{
+    width:100%; font-family:var(--font-body); font-size:14px;
+    padding: 9px 10px; border:1px solid var(--line); border-radius:var(--radius);
+    background:#FCFCFA; color:var(--ink);
+  }
+  input:focus, select:focus, textarea:focus{ outline:2px solid var(--amber); outline-offset:0; border-color:var(--amber);}
+  .field{ margin-bottom:14px; }
+  .formgrid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:14px 16px; }
+  .formgrid.two{ grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 720px){ .formgrid, .formgrid.two{ grid-template-columns: 1fr; } }
+  .radiogroup{ display:flex; gap:8px; margin-bottom:16px; }
+  .radiogroup button{
+    all:unset; cursor:pointer; padding:8px 14px; border:1px solid var(--line); border-radius:var(--radius);
+    font-size:13px; font-weight:600; color:var(--ink-soft);
+  }
+  .radiogroup button.active{ background:var(--dark); color:#fff; border-color:var(--dark); }
+  .hint{ font-size:12px; color:var(--ink-soft); margin-top:4px; }
+  .divider{ height:1px; background:var(--line); margin: 18px 0; }
+
+  /* ---------- Table ---------- */
+  .tablewrap{ overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); background:#fff;}
+  table{ 
+    width:100%; 
+    border-collapse:collapse; 
+    font-family: var(--font-body);
+    font-size:13.5px; 
+    min-width:1200px;
+  }
+  
+  thead th{
+    font-family: var(--font-body);
+    text-align: center;
+    background:#F5F5EF; 
+    color:var(--ink-soft); 
+    font-weight:700;
+    font-size:12px; 
+    text-transform:uppercase; 
+    letter-spacing:.04em;
+    padding:11px 8px; 
+    border-bottom:1px solid var(--line); 
+    white-space:nowrap; 
+    position:sticky; 
+    top:0;
+  }
+  tbody td{
+    font-family: var(--font-body);
+    text-align: center;
+    padding:10px 8px; 
+    border-bottom:1px solid #ECEDE6; 
+    vertical-align:middle; 
+    font-weight: 500;
+  }
+  tbody tr:hover{ background:#FBFBF7; }
+  tbody tr.duplicate-row{ background: #FFF8F7; }
+
+  .mono{ 
+    font-family: var(--font-body) !important; 
+    font-size: 13px; 
+    letter-spacing: 0.01em;
+  }
+  
+  .tag{
+    font-family: var(--font-body);
+    display:inline-block; padding:3px 9px; border-radius:20px; font-size:11.5px; font-weight:600;
+    letter-spacing:.02em;
+  }
+  .tag.retirado{ background:var(--green-bg); color:var(--green); }
+  .tag.nolocal{ background:var(--amber); color:#2A1E00; }
+  .tag.apreendido{ background:var(--blue-bg); color:var(--blue); }
+  .tag.vazio{ background:#F0F0EA; color:var(--ink-soft); }
+  .tag.outro{ background:#F0F0EA; color:var(--ink); }
+
+  .badge-dup{
+    display:inline-flex; align-items:center; gap:3px;
+    background:#FEE8E6; color:#C0392B; border:1px solid #F5B7B1;
+    font-family: var(--font-body);
+    font-size:10px; font-weight:700; border-radius:3px; padding:2px 5px;
+    margin-top:3px; letter-spacing:.03em; text-transform:uppercase;
+  }
+
+  /* ---------- MODELO DA PLACA ---------- */
+  .placa-mercosul{
+    display: inline-flex;
+    flex-direction: column;
+    width: 110px;
+    height: 38px;
+    background: #FFFFFF;
+    border: 2px solid #0B1320;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+    position: relative;
+    user-select: none;
+    vertical-align: middle;
+  }
+  .placa-mercosul .placa-header{
+    background: #003399;
+    color: #FFFFFF;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+  }
+  .placa-mercosul .placa-pais{
+    font-family: var(--font-plate);
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: #fff;
+    line-height: 1;
+    flex: 1;
+    text-align: center;
+  }
+  .placa-mercosul .placa-logo-mercosul{
+    display: flex;
+    gap: 1.5px;
+  }
+  .placa-mercosul .placa-logo-mercosul span{
+    width: 2px;
+    height: 2px;
+    background: #fff;
+    border-radius: 50%;
+  }
+  .placa-mercosul .placa-flag-br{
+    width: 9px;
+    height: 6px;
+    background: #009c3b;
+    position: relative;
+    border-radius: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .placa-mercosul .placa-flag-br::before{
+    content: '';
+    width: 6px;
+    height: 4px;
+    background: #ffdf00;
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  }
+  .placa-mercosul .placa-flag-br::after{
+    content: '';
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: #002776;
+    border-radius: 50%;
+  }
+  .placa-mercosul .placa-body{
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: radial-gradient(circle at 50% 50%, #FFFFFF 60%, #EFEFEF 100%);
+  }
+  .placa-mercosul .placa-caracteres{
+    font-family: var(--font-plate);
+    font-size: 18.5px;
+    font-weight: 700;
+    color: #111111;
+    letter-spacing: 2px;
+    line-height: 1;
+    text-shadow: 0.5px 0.5px 0px rgba(0,0,0,0.25);
+  }
+  .placa-mercosul .placa-br-seal{
+    position: absolute;
+    left: 4px;
+    bottom: 2px;
+    font-family: var(--font-body);
+    font-size: 6px;
+    font-weight: 800;
+    color: #444;
+    line-height: 1;
+  }
+  .placa-mercosul.sem-placa{
+    background: #F4F4F0;
+    border-color: #A3A8A0;
+    border-style: dashed;
+  }
+  .placa-mercosul.sem-placa .placa-header{
+    background: #7B828C;
+  }
+  .placa-mercosul.sem-placa .placa-caracteres{
+    font-family: var(--font-body);
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #6C757D;
+    letter-spacing: .02em;
+  }
+
+  /* Icon Buttons de Ação na Tabela */
+  .rowactions{ display:flex; gap:6px; align-items:center; justify-content:center; }
+  .btn-icon{
+    all: unset;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink-soft);
+    transition: all .15s ease;
+  }
+  .btn-icon:hover{
+    background: #F3F4EE;
+    color: var(--ink);
+    border-color: #BAC0B8;
+  }
+  .btn-icon.view:hover{ color: var(--blue); border-color: var(--blue); background: var(--blue-bg); }
+  .btn-icon.edit:hover{ color: var(--amber-ink); border-color: var(--amber); background: #FFF6E5; }
+  .btn-icon.del:hover{ color: var(--red); border-color: var(--red); background: var(--red-bg); }
+  .btn-icon svg{ width: 12px; height: 12px; stroke-width: 2; }
+
+  .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; }
+  .toolbar .field{ margin-bottom:0; min-width:160px; }
+  .toolbar .grow{ flex:1; min-width:220px; }
+
+  .pager{ display:flex; align-items:center; gap:10px; justify-content:flex-end; margin-top:12px; font-size:13px; color:var(--ink-soft);}
+
+  .empty{ text-align:center; padding: 40px 20px; color:var(--ink-soft); }
+  .empty .big{ font-family:var(--font-head); font-size:22px; color:var(--ink); margin-bottom:4px;}
+
+  /* toast */
+  #toast{
+    position:fixed; top:50%; left:50%; background:var(--panel); color:var(--ink);
+    width:max-content; max-width:calc(100vw - 32px); padding:22px 28px;
+    border:1px solid var(--line); border-top:4px solid var(--amber);
+    border-radius:var(--radius); font-family:var(--font-body); font-size:14px;
+    font-weight:500; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.2);
+    opacity:0; visibility:hidden; transform:translate(-50%,-50%);
+    transition:opacity .2s ease; pointer-events:none; z-index:1100;
+  }
+  #toast.show{ opacity:1; visibility:visible; }
+  .system-dialog{ padding:16px; border:0; background:transparent; max-width:520px; width:100%; }
+  .system-dialog::backdrop{ background:rgba(20,22,20,.6); backdrop-filter:blur(2px); }
+  .system-dialog .modal{ border-top:4px solid var(--amber); }
+  .system-dialog p{ line-height:1.6; }
+  .dialog-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+  .table-sort{ border:0; background:transparent; color:inherit; font:inherit; font-weight:700;
+    text-transform:inherit; letter-spacing:inherit; cursor:pointer; padding:0; }
+  .table-sort:hover{ color:var(--amber-ink); }
+  .table-sort:focus-visible{ outline:2px solid var(--amber); outline-offset:4px; }
+
+
+  /* modal */
+  .modal-bg{
+    position:fixed; inset:0; background:rgba(20,22,20,.6); display:flex; align-items:flex-start;
+    justify-content:center; padding: 35px 16px; overflow-y:auto; z-index:900;
+    backdrop-filter: blur(2px);
+  }
+  .modal{
+    background:#fff; border-radius:var(--radius); width:100%; max-width:760px; padding:24px 26px;
+    border:1px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  }
+  .modal h3{ font-family:var(--font-head); font-size:24px; margin:0 0 4px 0; }
+  .modal .close{
+    all:unset; cursor:pointer; float:right; font-size:24px; color:var(--ink-soft); line-height:1;
+    padding: 0 4px;
+  }
+  .modal .close:hover{ color: var(--red); }
+
+  .detail-section{
+    background: #FAFBF8;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .detail-section h4{
+    font-weight: 700;
+    font-family: var(--font-head);
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--ink-soft);
+    margin: 0 0 10px 0;
+    border-bottom: 1px solid #ECEEE5;
+    padding-bottom: 4px;
+  }
+  .detail-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px 16px;
+    font-size: 13.5px;
+  }
+  .detail-item .lbl{ font-size: 11.5px; color: var(--ink-soft); font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 2px;}
+  .detail-item .val{ font-weight: 500; color: var(--ink); word-break: break-word;}
+
+  .alert-banner{
+    display:flex; align-items:center; gap:10px; background:var(--red-bg); color:#7A2E1D;
+    border-left:4px solid var(--red); padding:10px 14px; border-radius:var(--radius); font-size:13px;
+    margin-bottom:16px; font-weight:500;
+  }
+
+  @page{ size:A4 landscape; margin:10mm; }
+  @media print{
+    .sidebar, .no-print, #toast, dialog, .modal-bg{ display:none !important; }
+    #app{ display:block; min-height:0; }
+    .main{ width:100%; }
+    .tablewrap{ overflow:visible; border:0; }
+    table{ min-width:0 !important; width:100%; table-layout:fixed; font-size:10px; }
+    thead{ display:table-header-group; }
+    thead th{ position:static; white-space:normal; font-size:9px; padding:6px 4px; }
+    tbody td{ padding:6px 4px; overflow-wrap:anywhere; }
+    tr, .card{ break-inside:avoid; }
+    .panel{ box-shadow:none; border:0; padding:0; }
+    .report-results .divider{ display:none; }
+    .report-results .topbar{ break-inside:avoid; }
+    .report-results .cards{ display:flex; flex-wrap:wrap; gap:8px; }
+    .report-results .card{ flex:1; padding:8px; }
+    .report-results .card .value{ font-size:22px; }
+    *{ print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+    .main{ padding:0; }
+    body{ background:#fff; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar"></aside>
+  <div class="main">
+    <div id="controle-view"></div>
+    <iframe id="pop-frame" class="pop-frame" title="Formulário de Abertura de POP" hidden></iframe>
+  </div>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- Input invisível para carregar arquivo Excel/CSV -->
+<input type="file" id="file-import-input" accept=".xlsx, .xls, .csv" style="display:none;">
+
+<script>
+/* =========================================================
+   ESTADO GLOBAL (100% ZERADO DE HARDCODED DATA)
+   ========================================================= */
+let STATE = {
+  sidebarCollapsed: window.matchMedia ? window.matchMedia('(max-width: 980px)').matches : false,
+  processes: [],
+  processEditingId: null,
+  processFilters: {q:'', origemDenuncia:'', status:'', sortBy:'', sortDir:'asc'},
+  processError: '',
+  vehicles: [], // Obtido exclusivamente do Firestore
+  view: 'veiculos',
+  cloudStatus: 'connecting',
+  cloudErrorMsg: '',
+  report: { field: 'dataAdesivamento', from: '', to: '', situacao: '', cidade: '', generated: false, results: [] },
+  listFilters: { q: '', situacao: '', onlyDuplicates: false, page: 1, pageSize: 25, sortBy: 'pop', sortDir: 'asc' },
+  editingId: null,
+  vistoriaMode: 'existing'
+};
+
+/* =========================================================
+   HELPERS & DUPLICAÇÃO
+   ========================================================= */
+function uid(){ return 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+function fmtBR(iso){
+  if(!iso) return '—';
+  const parts = String(iso).split('-');
+  if(parts.length!==3) return iso;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function daysAgo(iso){
+  if(!iso) return null;
+  const d = new Date(iso+'T00:00:00');
+  if(isNaN(d)) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
+function escapeHtml(s){
+  if(s===null||s===undefined) return '';
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function normalizeKey(str){
+  if(!str) return '';
+  return String(str).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function extractSei(obs, existingSei){
+  if(existingSei) return existingSei;
+  if(!obs) return null;
+  const m = String(obs).match(/\b\d{4}\.\d{4}\/\d{7}-\d\b/);
+  return m ? m[0] : null;
+}
+
+function getDuplicateMap(){
+  const placaCount = {};
+  const popCount = {};
+
+  STATE.vehicles.forEach(v => {
+    const pl = normalizeKey(v.placa);
+    if(pl && pl.length >= 4 && !pl.includes('SEMPLACA') && !pl.includes('XXXXXXX') && !pl.includes('SPLACA')){
+      placaCount[pl] = (placaCount[pl] || 0) + 1;
+    }
+    const pop = normalizeKey(v.pop);
+    if(pop){
+      popCount[pop] = (popCount[pop] || 0) + 1;
+    }
+  });
+
+  return { placaCount, popCount };
+}
+
+function isVehicleDuplicate(v, dupMap){
+  if(!dupMap) dupMap = getDuplicateMap();
+  const pl = normalizeKey(v.placa);
+  const pop = normalizeKey(v.pop);
+  return (pl && dupMap.placaCount[pl] > 1) || (pop && dupMap.popCount[pop] > 1);
+}
+
+function getDuplicateReason(v, dupMap){
+  if(!dupMap) dupMap = getDuplicateMap();
+  const pl = normalizeKey(v.placa);
+  const pop = normalizeKey(v.pop);
+  const reasons = [];
+  if(pl && dupMap.placaCount[pl] > 1) reasons.push(`Placa repetida (${dupMap.placaCount[pl]}x)`);
+  if(pop && dupMap.popCount[pop] > 1) reasons.push(`POP repetido (${dupMap.popCount[pop]}x)`);
+  return reasons.join(' e ');
+}
+
+function confirmSystem(message){
+  return new Promise(resolve => {
+    const previousFocus = document.activeElement;
+    const dialog = document.createElement('dialog');
+    dialog.className = 'system-dialog';
+    dialog.setAttribute('aria-labelledby', 'system-dialog-title');
+    dialog.innerHTML = '<div class="modal"><h3 id="system-dialog-title">Confirmar exclusão</h3><p>' + escapeHtml(message) + '</p><div class="dialog-actions"><button class="btn ghost" data-cancel autofocus>Cancelar</button><button class="btn amber" data-confirm>Excluir registro</button></div></div>';
+    document.body.appendChild(dialog);
+    let confirmed = false;
+    dialog.querySelector('[data-cancel]').addEventListener('click', () => dialog.close());
+    dialog.querySelector('[data-confirm]').addEventListener('click', () => { confirmed = true; dialog.close(); });
+    dialog.addEventListener('close', () => { dialog.remove(); previousFocus?.focus(); resolve(confirmed); }, {once:true});
+    dialog.showModal();
+  });
+}
+function toggleTableSort(field){
+  const f = STATE.listFilters;
+  f.sortDir = f.sortBy === field && f.sortDir === 'asc' ? 'desc' : 'asc';
+  f.sortBy = field;
+  f.page = 1;
+}
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=> t.classList.remove('show'), 3000);
+}
+
+
+const SITUACOES = ['NO LOCAL', 'REMOVIDO', 'APREENDIDO', 'NÃO VISTORIADO'];
+function normalizeSituacao(value){
+  const status = String(value || '').trim().toUpperCase();
+  return ['RETIRADO', 'REMOVIDO PELO PROPRIETÁRIO'].includes(status) ? SITUACOES[1] : status;
+}
+function situacaoOptions(value, optional = false){
+  const current = normalizeSituacao(value);
+  return (optional ? '<option value="">Manter situação atual</option>' : '') +
+    SITUACOES.map(status => '<option value="' + status + '" ' +
+      (status === current ? 'selected' : '') + '>' + status + '</option>').join('');
+}
+function formatSei(value){
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 16);
+  return digits.slice(0,4) + (digits.length > 4 ? '.' + digits.slice(4,8) : '') +
+    (digits.length > 8 ? '/' + digits.slice(8,15) : '') +
+    (digits.length > 15 ? '-' + digits.slice(15) : '');
+}
+function bindSeiInputs(root){
+  root.querySelectorAll('input[name="processoSei"]').forEach(input => {
+    input.inputMode = 'numeric';
+    input.maxLength = 19;
+    input.placeholder = '0000.0000/0000000-0';
+    input.pattern = '[0-9]{4}\\.[0-9]{4}/[0-9]{7}-[0-9]';
+    input.title = 'Digite os 16 números do processo SEI';
+    input.value = formatSei(input.value);
+    input.addEventListener('input', () => {
+      const count = input.value.slice(0, input.selectionStart).replace(/\D/g, '').length;
+      input.value = formatSei(input.value);
+      let position = 0, seen = 0;
+      while(position < input.value.length && seen < count){
+        if(/\d/.test(input.value[position])) seen++;
+        position++;
+      }
+      input.setSelectionRange(position, position);
+    });
+  });
+}
+// Connected groups keep records linked by either plate or POP together.
+function getDuplicateGroups(rows){
+  const map = getDuplicateMap();
+  const groups = [];
+  rows.forEach(vehicle => {
+    const keys = [];
+    const plate = normalizeKey(vehicle.placa), pop = normalizeKey(vehicle.pop);
+    if(map.placaCount[plate] > 1) keys.push('placa:' + plate);
+    if(map.popCount[pop] > 1) keys.push('pop:' + pop);
+    const matches = groups.filter(group => keys.some(key => group.keys.has(key)));
+    const group = matches[0] || { keys: new Set(), rows: [] };
+    if(!matches.length) groups.push(group);
+    keys.forEach(key => group.keys.add(key));
+    group.rows.push(vehicle);
+    matches.slice(1).forEach(other => {
+      other.keys.forEach(key => group.keys.add(key));
+      group.rows.push(...other.rows);
+      groups.splice(groups.indexOf(other), 1);
+    });
+  });
+  return groups;
+}
+
+function situacaoTagClass(s){
+  if(!s) return 'vazio';
+  const up = s.toUpperCase();
+  if(up.includes('RETIRADO') || up.includes('REMOVIDO')) return 'retirado';
+  if(up.includes('NO LOCAL')) return 'nolocal';
+  if(up.includes('APREEND')) return 'apreendido';
+  return 'outro';
+}
+
+function distinctValues(field){
+  if(field === 'situacao') return SITUACOES.slice();
+  const set = new Set();
+  STATE.vehicles.forEach(v => { if(v[field]) set.add(v[field]); });
+  return Array.from(set).sort();
+}
+
+function renderPlacaBadge(placaRaw){
+  if(!placaRaw) {
+    return `<div class="placa-mercosul sem-placa"><div class="placa-header"><span class="placa-pais">S/ PLACA</span></div><div class="placa-body"><span class="placa-caracteres">—</span></div></div>`;
+  }
+  const pUpper = String(placaRaw).trim().toUpperCase();
+  if(pUpper.includes('S/ PLACA') || pUpper.includes('SEM PLACA') || pUpper.includes('XXXXXXX')){
+    return `<div class="placa-mercosul sem-placa"><div class="placa-header"><span class="placa-pais">BRASIL</span></div><div class="placa-body"><span class="placa-caracteres">S/ PLACA</span></div></div>`;
+  }
+  const displayPlaca = pUpper.replace(/[\s-]/g, '');
+  return `
+    <div class="placa-mercosul" title="Placa: ${escapeHtml(pUpper)}">
+      <div class="placa-header">
+        <div class="placa-logo-mercosul"><span></span><span></span><span></span><span></span></div>
+        <span class="placa-pais">BRASIL</span>
+        <div class="placa-flag-br"></div>
+      </div>
+      <div class="placa-body">
+        <span class="placa-caracteres">${escapeHtml(displayPlaca)}</span>
+      </div>
+    </div>
+  `;
+}
+
+const ICONS = {
+  view: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  del: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
+  upload: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+  warning: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
+};
+
+/* =========================================================
+   FIREBASE (COMPAT / UMD)
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCUWSqYpCi_UX5WiFdelRoYvN0lALnDVTI",
+  authDomain: "controle-pop-b07e0.firebaseapp.com",
+  projectId: "controle-pop-b07e0",
+  storageBucket: "controle-pop-b07e0.firebasestorage.app",
+  messagingSenderId: "323313040428",
+  appId: "1:323313040428:web:3c5444aa126ad9d6d82589"
+};
+
+let db = null;
+let veiculosCol = null;
+let processosCol = null;
+
+function initFirebase(){
+  try {
+    if(!firebase.apps.length){
+      firebase.initializeApp(firebaseConfig);
+    }
+    db = firebase.firestore();
+    
+    try {
+      db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+    } catch(e){}
+
+    veiculosCol = db.collection("veiculos");
+    processosCol = db.collection("processos");
+    processosCol.onSnapshot(snapshot => {
+      STATE.processes = snapshot.docs.map(doc => ({...doc.data(), id:doc.id}));
+      STATE.processError = '';
+      if(STATE.view === 'processos') render();
+    }, error => {
+      STATE.processError = error.message || error.code;
+      if(STATE.view === 'processos') render();
+    });
+
+    if(firebase.auth){
+      firebase.auth().signInAnonymously().catch(()=>{});
+    }
+
+    // Escuta em tempo real direto da nuvem
+    veiculosCol.onSnapshot((snapshot) => {
+      STATE.cloudStatus = 'connected';
+      STATE.cloudErrorMsg = '';
+      const list = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        list.push({ ...data, id: doc.id, situacao: normalizeSituacao(data.situacao), processoSei: formatSei(data.processoSei || extractSei(data.observacao)) });
+      });
+      STATE.vehicles = list;
+      render();
+    }, (error) => {
+      console.warn("Status Firestore:", error);
+      STATE.cloudStatus = 'error';
+      STATE.cloudErrorMsg = error.message || error.code;
+      render();
+    });
+
+  } catch(err) {
+    console.error("Erro Firebase:", err);
+    STATE.cloudStatus = 'error';
+    STATE.cloudErrorMsg = err.message || err;
+    render();
+  }
+}
+
+async function syncVehicleToFirestore(vehicle){
+  vehicle = {...vehicle, situacao: normalizeSituacao(vehicle.situacao) || 'NÃO VISTORIADO', processoSei: formatSei(vehicle.processoSei) || null};
+  delete vehicle.baixaSgf;
+  if(!db || !veiculosCol) throw new Error("Firebase indisponível. Tente reconectar.");
+  if(db && veiculosCol){
+    try {
+      await veiculosCol.doc(vehicle.id).set(vehicle, { merge: true });
+      showToast("Salvo no Firebase com sucesso!");
+    } catch(e) {
+      console.error(e);
+      showToast("Erro ao salvar no Firebase: " + (e.message || e.code));
+      throw e;
+    }
+  }
+}
+
+async function removeVehicleFromFirestore(id){
+  if(db && veiculosCol){
+    try {
+      await veiculosCol.doc(id).delete();
+      showToast("Excluído do Firebase!");
+    } catch(e) {
+      console.error(e);
+      showToast("Erro ao excluir do Firebase.");
+    }
+  }
+}
+
+window.reconectarFirebase = function(){
+  STATE.cloudStatus = 'connecting';
+  render();
+  initFirebase();
+};
+
+/* =========================================================
+   MÓDULO DE IMPORTAÇÃO DE PLANILHA (EXCEL / CSV)
+   ========================================================= */
+function parseDateCell(val, date1904 = false){
+  if(val === null || val === undefined || val === '') return null;
+  const calendarISO = (y,m,d) => {
+    const check = new Date(Date.UTC(y,m-1,d));
+    if(check.getUTCFullYear() !== y || check.getUTCMonth()+1 !== m || check.getUTCDate() !== d) return null;
+    return String(y).padStart(4,'0')+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+  };
+  if(val instanceof Date) return calendarISO(val.getFullYear(), val.getMonth()+1, val.getDate());
+  const s = String(val).trim();
+  let match = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:$|[ T])/);
+  if(match) return calendarISO(+match[3],+match[2],+match[1]);
+  match = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:$|[ T])/);
+  if(match) return calendarISO(+match[1],+match[2],+match[3]);
+  if(!/^\d+(?:\.\d+)?$/.test(s)) return null;
+  const serial = Number(s);
+  if(!Number.isFinite(serial) || serial <= 0) return null;
+  // Excel stores calendar dates as serials, not timezone-dependent instants.
+  const parts = XLSX.SSF.parse_date_code(Math.floor(serial + 1e-8), {date1904});
+  return parts ? calendarISO(parts.y,parts.m,parts.d) : null;
+}
+
+function handleImportFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const data = new Uint8Array(e.target.result);
+      // Ler sem cellDates para receber datas como numero serial do Excel
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+
+      // Ler como array de arrays para detectar a linha de cabecalho real
+      const allRows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', header: 1 });
+
+      if(!allRows || allRows.length === 0){
+        showToast("Nenhum dado encontrado na planilha.");
+        return;
+      }
+
+      // Encontrar a linha do cabecalho: a linha com maior numero de celulas preenchidas
+      let headerRowIdx = 0;
+      let maxFilled = 0;
+      for(let i = 0; i < Math.min(15, allRows.length); i++){
+        const filled = allRows[i].filter(c => String(c).trim() !== '').length;
+        if(filled > maxFilled){ maxFilled = filled; headerRowIdx = i; }
+      }
+
+      // Normalizar cabecalhos: minusculo, sem acentos, espacos simples
+      // Normalizar strings: minusculo, sem acentos, ordinal, espacos simples
+      function normStr(str){
+        if(!str) return '';
+        let s = String(str).trim().toLowerCase();
+        // Remover diacriticos via decomposicao NFD
+        s = s.normalize('NFD');
+        // Remover combining diacritical marks (U+0300 a U+036F) - char por char
+        let result = '';
+        for(let i = 0; i < s.length; i++){
+          const code = s.charCodeAt(i);
+          // Pular combining diacritical marks (0x0300-0x036F)
+          if(code >= 0x0300 && code <= 0x036F) continue;
+          // Pular ordinal masculino (0xBA = 186), feminino (0xAA = 170), grau (0xB0 = 176)
+          if(code === 0xBA || code === 0xAA || code === 0xB0) continue;
+          // Manter apenas ASCII imprimivel (0x20-0x7E)
+          if(code > 0x7E && code !== 0x20) continue;
+          result += s[i];
+        }
+        return result.replace(/\s+/g, ' ').trim();
+      }
+
+      const headers = allRows[headerRowIdx].map(h => normStr(h));
+
+      const dataRows = allRows.slice(headerRowIdx + 1);
+
+      function getColFromRow(rowArr, ...names){
+        for(const n of names){
+          const normName = normStr(n);
+          const idx = headers.findIndex(h => {
+            if(h === normName) return true;
+            if(h.includes(normName) && normName.length >= 4) return true;
+            if(normName.includes(h) && h.length >= 4) return true;
+            return false;
+          });
+          if(idx >= 0 && rowArr[idx] !== undefined && String(rowArr[idx]).trim() !== ''){
+            return String(rowArr[idx]).trim();
+          }
+        }
+        return null;
+      }
+
+      function xlSerialToISO(val){
+        return parseDateCell(val, !!workbook.Workbook?.WBProps?.date1904);
+      }
+
+            const parsedVehicles = dataRows.map(row => {
+        const pop         = getColFromRow(row, 'no pop', 'n pop', 'pop', 'numero pop', 'num pop');
+        const placa       = getColFromRow(row, 'placa', 'placas');
+        const veiculo     = getColFromRow(row, 'marca /  modelo', 'marca / modelo', 'marca/modelo', 'marca modelo', 'veiculo', 'modelo', 'marca');
+        const dem         = getColFromRow(row, 'demanda', 'dem', 'no demanda', 'n demanda');
+        const processoSei = getColFromRow(row, 'processo sei', 'sei', 'no processo sei', 'processo');
+        const cor         = getColFromRow(row, 'cor');
+        const endereco    = getColFromRow(row, 'endereco', 'local');
+        const cidade      = getColFromRow(row, 'cidade/estado', 'cidade / estado', 'cidade estado', 'cidade', 'municipio');
+        const situacao    = getColFromRow(row, 'situacao', 'status') || 'NO LOCAL';
+        const observacao  = getColFromRow(row, 'observacao', 'obs');
+        const origemDenuncia = getColFromRow(row, 'origem denuncia', 'origem');
+
+        const dataAdesivamento = xlSerialToISO(getColFromRow(row, 'data adesivamento', 'adesivamento'));
+        const intimacao        = xlSerialToISO(getColFromRow(row, 'data intimacao', 'intimacao'));
+        const vistoria1        = xlSerialToISO(getColFromRow(row, 'data 1a vistoria', '1a vistoria', 'data 1 vistoria', 'vistoria1'));
+        const vistoria2        = xlSerialToISO(getColFromRow(row, '2a vist.', '2a vistoria', 'vistoria2'));
+        const ultimaVistoria   = xlSerialToISO(getColFromRow(row, 'data ultima vistoria', 'ultima vistoria'));
+        const dataApreensao    = xlSerialToISO(getColFromRow(row, 'data apreens.', 'data apreensao', 'apreensao'));
+
+        return {
+          id: uid(),
+          dem,
+          pop,
+          processoSei: extractSei(observacao, processoSei),
+          veiculo,
+          placa,
+          cor,
+          endereco,
+          cidade,
+          dataAdesivamento,
+          intimacao,
+          vistoria1,
+          vistoria2,
+          ultimaVistoria,
+          dataApreensao,
+          situacao,
+          origemDenuncia,
+          observacao,
+          createdAt: todayISO(),
+          updatedAt: todayISO()
+        };
+      }).filter(v => v.pop || v.placa || v.veiculo);
+
+      if(parsedVehicles.length === 0){
+        showToast("Nenhum registro valido encontrado. Verifique se a planilha tem as colunas: Nº POP, PLACA ou MARCA/MODELO.");
+        return;
+      }
+
+      openImportPreviewModal(parsedVehicles);
+
+    } catch(err) {
+      console.error(err);
+      showToast("Erro ao processar planilha: " + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function openImportPreviewModal(vehiclesList){
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `
+    <div class="modal" style="max-width:860px;">
+      <button class="close" data-close-modal title="Fechar">&times;</button>
+      <h3>Importação de Planilha</h3>
+      <p class="hint" style="margin-bottom:14px;">Foram identificados <b>${vehiclesList.length} registro(s) válidos</b> no arquivo.</p>
+
+      <div class="tablewrap" style="max-height:300px; margin-bottom:16px;">
+        <table>
+          <thead>
+            <tr>
+              <th>POP</th><th>Demanda</th><th>SEI</th><th>Marca / Modelo</th><th>Placa</th><th>Adesivamento</th><th>Últ. Vistoria</th><th>Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${vehiclesList.slice(0, 15).map(v => `
+              <tr>
+                <td class="mono"><b>${escapeHtml(v.pop||'—')}</b></td>
+                <td class="mono">${escapeHtml(v.dem||'—')}</td>
+                <td class="mono" style="font-size:11.5px;">${escapeHtml(v.processoSei||'—')}</td>
+                <td>${escapeHtml(v.veiculo||'—')}</td>
+                <td>${renderPlacaBadge(v.placa)}</td>
+                <td class="mono">${fmtBR(v.dataAdesivamento)}</td>
+                <td class="mono">${fmtBR(v.ultimaVistoria)}</td>
+                <td><span class="tag ${situacaoTagClass(v.situacao)}">${escapeHtml(v.situacao||'—')}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${vehiclesList.length > 15 ? `<p class="hint" style="text-align:center;">... e mais ${vehiclesList.length - 15} veículos que serão gravados.</p>` : ''}
+
+      <div class="alert-banner" style="background:#EBF5FB; border-left-color:var(--blue); color:#1B4F72;">
+        💡 Os veículos serão gravados diretamente no banco de dados Firebase Firestore na nuvem.
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+        <button class="btn amber" id="btn-confirm-import">Confirmar e Gravar no Firebase</button>
+        <button class="btn ghost" data-close-modal>Cancelar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(bg);
+
+  bg.querySelectorAll('[data-close-modal]').forEach(el => el.addEventListener('click', ()=> bg.remove()));
+  bg.addEventListener('click', (e)=> { if(e.target===bg) bg.remove(); });
+
+  bg.querySelector('#btn-confirm-import').addEventListener('click', async ()=>{
+    const btn = bg.querySelector('#btn-confirm-import');
+    btn.disabled = true;
+    btn.textContent = "Gravando na nuvem...";
+
+    try {
+      if(!db || !veiculosCol){
+        throw new Error("O Firebase ainda não está conectado. Verifique sua conexão.");
+      }
+
+      for(let i = 0; i < vehiclesList.length; i += 300){
+        const chunk = vehiclesList.slice(i, i + 300);
+        const batch = db.batch();
+        chunk.forEach(v => {
+          batch.set(veiculosCol.doc(v.id), v, { merge: true });
+        });
+        await batch.commit();
+      }
+
+      bg.remove();
+      showToast(`${vehiclesList.length} veículos gravados no Firebase com sucesso!`);
+    } catch(e){
+      console.error(e);
+      showToast("Erro ao importar: " + e.message);
+      btn.disabled = false;
+      btn.textContent = "Tentar Novamente";
+    }
+  });
+}
+
+/* =========================================================
+   RENDER — SHELL
+   ========================================================= */
+const NAV_ITEMS = [
+  { id: 'processos', label: 'Processos' },
+  { id: 'abertura-pop', label: 'Abertura de POP' },
+  { id:'veiculos', label:'Veículos' },
+  { id:'dashboard', label:'Painel' },
+  { id:'vistoria', label:'Registrar Vistoria' },
+  { id:'relatorios', label:'Relatórios' },
+];
+
+function render(){
+  const app = document.getElementById('app');
+  let statusText = 'Conectando Nuvem...';
+  if(STATE.cloudStatus === 'connected') statusText = 'Firebase Conectado';
+  if(STATE.cloudStatus === 'error') statusText = 'Firebase Offline / Erro';
+
+  document.getElementById('sidebar').outerHTML = `
+    <aside class="sidebar ${STATE.sidebarCollapsed?'collapsed':''}" id="sidebar" aria-label="Menu principal">
+      <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-controls="sidebar" aria-expanded="${!STATE.sidebarCollapsed}" aria-label="${STATE.sidebarCollapsed?'Expandir menu':'Recolher menu'}" title="${STATE.sidebarCollapsed?'Expandir menu':'Recolher menu'}">${STATE.sidebarCollapsed?'›':'‹'}</button>
+      <div class="brand">
+        <div class="tag">SUPERVISÃO TÉCNICA DE FISCALIZAÇÃO</div>
+        <h1>Veículos<br>Apreendidos</h1>
+      </div>
+      <div class="nav">
+        ${NAV_ITEMS.map(n => `
+          <button data-nav="${n.id}" class="${STATE.view===n.id?'active':''}">
+            <span class="dot"></span>${n.label}
+          </button>`).join('')}
+      </div>
+
+      <div style="padding: 12px 14px;">
+        <button class="btn ghost small" style="width:100%; justify-content:center; color:#C9CDD4; border-color:#3E4651; background:#262D36;" id="btn-sidebar-import">
+          ${ICONS.upload} <span>Importar Planilha</span>
+        </button>
+      </div>
+
+      <div class="sidebar-foot">
+        <div class="cloud-status ${STATE.cloudStatus}">
+          <span class="dot-status"></span>
+          <span>${statusText}</span>
+        </div>
+        ${STATE.vehicles.length} veículos na nuvem.<br>
+        100% Firebase Firestore.
+      </div>
+    </aside>
+  `;
+  document.getElementById('controle-view').innerHTML = `
+      ${STATE.cloudStatus === 'error' ? `
+        <div class="alert-banner" style="background:#FDEDEC; border-left-color:#E74C3C; color:#78281F; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div>
+            <b>Aviso do Firebase:</b> ${escapeHtml(STATE.cloudErrorMsg)}
+            <br><span style="font-size:12px; opacity:0.9;">Verifique as Regras de Segurança no console do Firebase.</span>
+          </div>
+          <button class="btn small" style="background:#E74C3C; color:#fff; border-color:#E74C3C;" onclick="window.reconectarFirebase()">Tentar Reconectar</button>
+        </div>
+      ` : ''}
+      ${renderView()}
+  `;
+  // Keep the form mounted so navigation and Firestore updates preserve its state.
+  const popFrame = document.getElementById('pop-frame');
+  popFrame.hidden = STATE.view !== 'abertura-pop';
+  if (!popFrame.hidden && !popFrame.hasAttribute('src')) {
+    popFrame.src = './abertura-pop.html';
+  }
+  bindEvents();
+  bindSeiInputs(app);
+}
+
+function renderView(){
+  switch(STATE.view){
+    case 'veiculos': return viewVeiculos();
+    case 'dashboard': return viewDashboard();
+    case 'vistoria': return viewVistoria();
+    case 'relatorios': return viewRelatorios();
+    case 'processos': return viewProcessos();
+    default: return '';
+  }
+}
+
+
+const PROCESS_STATUSES = ['respondido', 'na caixa', 'aguardando vistoria'];
+const PROCESS_ORIGINS = ['Ouvidoria', 'Vereador', 'Gabinete', 'MP'];
+const PROCESS_FIELDS = [['processoSei','Nº Processo SEI'],['dem','Nº Demanda'],['pop','Nº POP'],['endereco','Endereço'],['origemDenuncia','Origem da denúncia'],['dataRecebimento','Data recebimento'],['prazo','Prazo'],['dataResposta','Data resposta'],['status','Status']];
+function processColor(value){
+  return ({respondido:'retirado','na caixa':'apreendido','aguardando vistoria':'nolocal',Ouvidoria:'apreendido',Vereador:'retirado',Gabinete:'nolocal',MP:'process-mp'})[value] || 'outro';
+}
+function processTag(value){ return `<span class="tag ${processColor(value)}"${value==='MP'?' style="background:var(--red-bg);color:var(--red)"':''}>${escapeHtml(value || '—')}</span>`; }
+function processOptions(values, selected, emptyLabel){
+  return (emptyLabel ? `<option value="">${emptyLabel}</option>` : '')+values.map(value=>`<option value="${escapeHtml(value)}" ${value===selected?'selected':''}>${escapeHtml(value)}</option>`).join('');
+}
+function normalizeProcessSearch(value){ return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+function getFilteredProcesses(){
+  const f=STATE.processFilters, q=normalizeProcessSearch(f.q);
+  const list=STATE.processes.filter(p=>(!f.origemDenuncia || p.origemDenuncia===f.origemDenuncia) && (!f.status || p.status===f.status) && (!q || PROCESS_FIELDS.some(([key])=>normalizeProcessSearch(p[key]).includes(q) || (key.startsWith('data') || key==='prazo') && normalizeProcessSearch(fmtBR(p[key])).includes(q))));
+  if(f.sortBy) list.sort((a,b)=>{
+    const av=a[f.sortBy] || '', bv=b[f.sortBy] || '';
+    if(!av || !bv) return av ? -1 : bv ? 1 : 0;
+    return String(av).localeCompare(String(bv),'pt-BR',{sensitivity:'base',numeric:true})*(f.sortDir==='asc'?1:-1);
+  });
+  return list;
+}
+function toggleProcessSort(key){
+  const f=STATE.processFilters;
+  f.sortDir=f.sortBy===key && f.sortDir==='asc' ? 'desc' : 'asc'; f.sortBy=key;
+}
+function processCell(p,key){
+  if(key==='origemDenuncia' || key==='status') return processTag(p[key]);
+  return escapeHtml(key==='prazo' || key.startsWith('data') ? fmtBR(p[key]) : p[key] || '—');
+}
+function viewProcessos(){
+  const f=STATE.processFilters, rows=getFilteredProcesses();
+  return `<div class="topbar"><div><h2>Processos</h2><p>${rows.length} de ${STATE.processes.length} processos cadastrados</p></div><button class="btn amber" id="process-new">+ Novo processo</button></div>
+  ${STATE.processError ? '<div class="alert-banner">Não foi possível carregar os processos: '+escapeHtml(STATE.processError)+'</div>' : ''}
+  <div class="panel"><div class="formgrid">
+  <div class="field"><label for="process-search">Buscar processos</label><input id="process-search" type="search" placeholder="SEI, demanda, POP, endereço..." value="${escapeHtml(f.q)}"></div>
+  <div class="field"><label for="process-origin-filter">Origem da denúncia</label><select id="process-origin-filter">${processOptions(PROCESS_ORIGINS,f.origemDenuncia,'Todas as origens')}</select></div>
+  <div class="field"><label for="process-status-filter">Status</label><select id="process-status-filter">${processOptions(PROCESS_STATUSES,f.status,'Todos os status')}</select></div>
+  </div></div>
+  <div class="panel" style="overflow-x:auto"><table><thead><tr>${PROCESS_FIELDS.map(([key,label])=>['origemDenuncia','prazo','status'].includes(key)?`<th aria-sort="${f.sortBy===key?(f.sortDir==='asc'?'ascending':'descending'):'none'}"><button class="table-sort" type="button" data-process-sort="${key}">${label} ${f.sortBy===key?(f.sortDir==='asc'?'↑':'↓'):'↕'}</button></th>`:`<th>${label}</th>`).join('')}<th>Ações</th></tr></thead><tbody>
+  ${rows.map(p=>`<tr>${PROCESS_FIELDS.map(([key])=>`<td>${processCell(p,key)}</td>`).join('')}<td><div class="rowactions"><button class="btn-icon view" title="Visualizar ficha completa" aria-label="Visualizar processo" data-view-process="${escapeHtml(p.id)}">${ICONS.view}</button><button class="btn-icon edit" title="Editar processo" aria-label="Editar processo" data-edit-process="${escapeHtml(p.id)}">${ICONS.edit}</button><button class="btn-icon del" title="Excluir processo" aria-label="Excluir processo" data-delete-process="${escapeHtml(p.id)}">${ICONS.del}</button></div></td></tr>`).join('') || '<tr><td colspan="10">Nenhum processo encontrado.</td></tr>'}
+  </tbody></table></div>`;
+}
+async function saveProcess(data,id=null){
+  if(!processosCol) throw new Error('Firebase indisponível. Tente reconectar.');
+  if(!data.processoSei || !data.processoSei.trim()) throw new Error('Informe o nº do processo SEI.');
+  if(!PROCESS_STATUSES.includes(data.status)) throw new Error('Status inválido.');
+  if(data.origemDenuncia && !PROCESS_ORIGINS.includes(data.origemDenuncia)) throw new Error('Selecione uma origem da denúncia válida.');
+  const process={...data,processoSei:formatSei(data.processoSei),updatedAt:todayISO()};
+  if(id) await processosCol.doc(id).set(process,{merge:true});
+  else await processosCol.doc(uid()).set({...process,createdAt:todayISO()});
+}
+function processFormHTML(p={}){
+  return `<form id="form-process"><div class="formgrid">${PROCESS_FIELDS.map(([key,label])=>{
+    let input;
+    if(key==='status' || key==='origemDenuncia'){
+      const values=key==='status'?PROCESS_STATUSES:PROCESS_ORIGINS;
+      const value=p[key] || (key==='status'?'na caixa':'');
+      input=`<select id="process-${key}" name="${key}" class="tag ${processColor(value)}">${processOptions(values,value,key==='origemDenuncia'?'Selecione a origem':null)}</select>`;
+    }else input=`<input id="process-${key}" name="${key}" type="${key==='prazo' || key.startsWith('data')?'date':'text'}" ${key==='processoSei'?'required':''} value="${escapeHtml(p[key] || '')}">`;
+    return `<div class="field"><label for="process-${key}">${label}</label>${input}</div>`;
+  }).join('')}</div><button class="btn amber" type="submit">${p.id?'Salvar alterações':'Cadastrar processo'}</button> <button class="btn ghost" type="button" data-close-process>Cancelar</button><p id="process-feedback" role="status" class="hint"></p></form>`;
+}
+function openProcessModal(id=null, details=false){
+  const p=id?STATE.processes.find(p=>p.id===id):{};
+  if(!p) return;
+  const previousFocus=document.activeElement;
+  const bg=document.createElement('div');bg.className='modal-bg';
+  bg.innerHTML=`<div class="modal" role="dialog" aria-modal="true" aria-labelledby="process-modal-title"><button class="close" data-close-process aria-label="Fechar">&times;</button><h3 id="process-modal-title">${details?'Detalhes do processo':id?'Editar processo':'Novo processo'}</h3>${details?`<div class="formgrid">${PROCESS_FIELDS.map(([key,label])=>`<div class="detail-item"><span class="lbl">${label}</span><span class="val">${processCell(p,key)}</span></div>`).join('')}</div>`:processFormHTML(p)}</div>`;
+  document.body.appendChild(bg);
+  const close=()=>{bg.remove();document.removeEventListener('keydown',escape);previousFocus?.focus();};
+  const escape=e=>{if(e.key==='Escape')close();};document.addEventListener('keydown',escape);
+  bg.querySelectorAll('[data-close-process]').forEach(button=>button.addEventListener('click',close));
+  bg.addEventListener('click',e=>{if(e.target===bg)close();});
+  bindSeiInputs(bg);
+  bg.querySelectorAll('select').forEach(select=>{
+    const color=()=>{select.className='tag '+processColor(select.value);select.style.background=select.value==='MP'?'var(--red-bg)':'';select.style.color=select.value==='MP'?'var(--red)':'';};
+    select.addEventListener('change',color);color();
+  });
+  const form=bg.querySelector('form');
+  if(form){
+    form.querySelector('input').focus();
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();const data=Object.fromEntries([...new FormData(form)].map(([key,value])=>[key,value.trim() || null]));
+      const button=form.querySelector('[type="submit"]');button.disabled=true;
+      try{await saveProcess(data,id);close();showToast('Processo salvo no Firebase!');}
+      catch(error){form.querySelector('#process-feedback').textContent='Erro ao salvar: '+error.message;button.disabled=false;}
+    });
+  }else bg.querySelector('button').focus();
+}
+function bindProcessEvents(){
+  document.getElementById('process-new')?.addEventListener('click',()=>openProcessModal());
+  document.querySelectorAll('[data-edit-process]').forEach(button=>button.addEventListener('click',()=>openProcessModal(button.getAttribute('data-edit-process'))));
+  document.querySelectorAll('[data-view-process]').forEach(button=>button.addEventListener('click',()=>openProcessModal(button.getAttribute('data-view-process'),true)));
+  document.querySelectorAll('[data-delete-process]').forEach(button=>button.addEventListener('click',async()=>{
+    const id=button.getAttribute('data-delete-process'),p=STATE.processes.find(p=>p.id===id);
+    if(!p || !await confirmSystem(`Excluir definitivamente o processo ${p.processoSei || ''}? Esta ação apagará da nuvem Firebase.`))return;
+    button.disabled=true;
+    try{if(!processosCol)throw new Error('Firebase indisponível.');await processosCol.doc(id).delete();showToast('Processo excluído do Firebase!');}
+    catch(error){showToast('Erro ao excluir processo: '+error.message);button.disabled=false;}
+  }));
+  document.querySelectorAll('[data-process-sort]').forEach(button=>button.addEventListener('click',()=>{toggleProcessSort(button.getAttribute('data-process-sort'));render();}));
+  for(const [element,key] of [['process-origin-filter','origemDenuncia'],['process-status-filter','status']])document.getElementById(element)?.addEventListener('change',event=>{STATE.processFilters[key]=event.target.value;render();});
+  document.getElementById('process-search')?.addEventListener('input',event=>{
+    const input=event.target,position=input.selectionStart;STATE.processFilters.q=input.value;render();
+    const replacement=document.getElementById('process-search');replacement.focus();if(position!==null)replacement.setSelectionRange(position,position);
+  });
+}
+
+function viewVeiculos(){
+  const f = STATE.listFilters;
+  const dupMap = getDuplicateMap();
+  const all = getFilteredVehicles();
+  const groups = f.onlyDuplicates ? getDuplicateGroups(all) : null;
+  const totalPages = Math.max(1, Math.ceil((groups ? groups.length : all.length) / f.pageSize));
+  f.page = Math.min(f.page, totalPages);
+  const start = (f.page-1) * f.pageSize;
+  const pageGroups = groups ? groups.slice(start, start+f.pageSize) : null;
+  const pageItems = pageGroups ? pageGroups.flatMap(group => group.rows) : all.slice(start, start+f.pageSize);
+  const situacoes = distinctValues('situacao');
+
+  return `
+    <div class="topbar">
+      <div>
+        <h2>Veículos cadastrados</h2>
+        <p>${all.length} de ${STATE.vehicles.length} veículos cadastrados no Firebase ${f.q||f.situacao||f.onlyDuplicates ? '(filtrados)':''}</p>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <button class="btn ghost" id="btn-topbar-import">
+          ${ICONS.upload} <span>Importar Planilha</span>
+        </button>
+        <button class="btn ${f.onlyDuplicates?'filter-active':'ghost'}" id="btn-toggle-duplicates">
+          ${ICONS.warning} <span>${f.onlyDuplicates ? 'Vendo apenas duplicados' : 'Filtrar duplicados'}</span>
+        </button>
+        <button class="btn amber" data-nav="vistoria">+ Novo veículo</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="field grow">
+        <label>Buscar (placa, POP, demanda, SEI, marca, endereço, cidade)</label>
+        <input type="text" id="list-search" value="${escapeHtml(f.q)}" placeholder="Digite para buscar…">
+      </div>
+      <div class="field">
+        <label>Situação</label>
+        <select id="list-situacao">
+          <option value="">Todas</option>
+          ${situacoes.map(s=>`<option value="${escapeHtml(s)}" ${f.situacao===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Ordenar por</label>
+        <select id="list-sort">
+          <option value="pop" ${f.sortBy==='pop'?'selected':''}>Nº POP</option>
+          <option value="endereco" ${f.sortBy==='endereco'?'selected':''}>Endereço</option>
+          <option value="intimacao" ${f.sortBy==='intimacao'?'selected':''}>Data Intimação</option>
+          <option value="ultimaVistoria" ${f.sortBy==='ultimaVistoria'?'selected':''}>Última Vistoria</option>
+          <option value="dataAdesivamento" ${f.sortBy==='dataAdesivamento'?'selected':''}>Data adesivamento</option>
+          <option value="placa" ${f.sortBy==='placa'?'selected':''}>Placa</option>
+          <option value="situacao" ${f.sortBy==='situacao'?'selected':''}>Situação</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th aria-sort="${f.sortBy==='pop'?(f.sortDir==='asc'?'ascending':'descending'):'none'}"><button type="button" class="table-sort" data-sort="pop">POP ${f.sortBy==='pop'?(f.sortDir==='asc'?'↑':'↓'):'↕'}</button></th>
+            <th aria-sort="${f.sortBy==='endereco'?(f.sortDir==='asc'?'ascending':'descending'):'none'}"><button type="button" class="table-sort" data-sort="endereco">ENDEREÇO ${f.sortBy==='endereco'?(f.sortDir==='asc'?'↑':'↓'):'↕'}</button></th>
+            <th>Marca/Modelo</th><th>Placa</th><th>Nº Processo SEI</th>
+            <th>Data Adesivamento</th><th>Data Intimação</th><th>Data Última Vistoria</th>
+            <th>Situação</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pageItems.map(v => {
+            const isDup = isVehicleDuplicate(v, dupMap);
+            const dupReason = isDup ? getDuplicateReason(v, dupMap) : '';
+            const group = pageGroups && pageGroups.find(group => group.rows[0] === v);
+            const groupHeader = group ? '<tr><td colspan="10" style="font-weight:700;background:var(--red-bg);padding:12px;">Grupo de duplicados · ' + group.rows.length + ' demandas · ' + escapeHtml(Array.from(group.keys).map(key => key.replace('placa:', 'Placa ').replace('pop:', 'POP ')).join(' / ')) + '</td></tr>' : '';
+            return `
+            ${groupHeader}
+            <tr class="${isDup ? 'duplicate-row' : ''}">
+              <td class="mono">
+                <b>${escapeHtml(v.pop||'—')}</b>
+                ${isDup ? `<br><span class="badge-dup" title="${escapeHtml(dupReason)}">${ICONS.warning} Duplicado</span>` : ''}
+              </td>
+              <td>${escapeHtml(v.endereco||'—')}</td>
+              <td>${escapeHtml(v.veiculo||'—')}</td>
+              <td>${renderPlacaBadge(v.placa)}</td>
+              <td class="mono" style="font-size:12.5px;">${escapeHtml(v.processoSei||extractSei(v.observacao)||'—')}</td>
+              <td class="mono">${fmtBR(v.dataAdesivamento)}</td>
+              <td class="mono">${fmtBR(v.intimacao)}</td>
+              <td class="mono">${fmtBR(v.ultimaVistoria)}</td>
+              <td><span class="tag ${situacaoTagClass(v.situacao)}">${escapeHtml(v.situacao||'Sem status')}</span></td>
+              <td>
+                <div class="rowactions">
+                  <button class="btn-icon view" title="Visualizar ficha completa" data-view-details="${v.id}">
+                    ${ICONS.view}
+                  </button>
+                  <button class="btn-icon edit" title="Editar veículo" data-edit-full="${v.id}">
+                    ${ICONS.edit}
+                  </button>
+                  <button class="btn-icon del" title="Excluir veículo" data-delete="${v.id}">
+                    ${ICONS.del}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          `;}).join('') || `
+            <tr>
+              <td colspan="10">
+                <div class="empty">
+                  <div class="big">${STATE.vehicles.length === 0 ? 'Nenhum veículo no Firebase' : 'Nenhum veículo encontrado'}</div>
+                  ${STATE.vehicles.length === 0 ? 'Clique no botão <b>Importar Planilha</b> para adicionar seus registros.' : 'Ajuste os filtros de busca.'}
+                </div>
+              </td>
+            </tr>
+          `}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pager">
+      <span>Página ${f.page} de ${totalPages}</span>
+      <button class="btn ghost small" id="pg-prev" ${f.page<=1?'disabled':''}>Anterior</button>
+      <button class="btn ghost small" id="pg-next" ${f.page>=totalPages?'disabled':''}>Próxima</button>
+    </div>
+  `;
+}
+
+function viewDashboard(){
+  const v = STATE.vehicles;
+  const dupMap = getDuplicateMap();
+  const total = v.length;
+  const noLocal = v.filter(x => (x.situacao||'').toUpperCase().includes('NO LOCAL')).length;
+  const retirado = v.filter(x => (x.situacao||'').toUpperCase().includes('REMOVIDO')).length;
+  const apreendido = v.filter(x => x.dataApreensao).length;
+  const semVistoria = v.filter(x => !x.vistoria1 && x.dataAdesivamento && daysAgo(x.dataAdesivamento) >= 30 && !(x.situacao||'').toUpperCase().includes('REMOVIDO')).length;
+  const duplicadosCount = v.filter(x => isVehicleDuplicate(x, dupMap)).length;
+  const cadastros30 = v.filter(x => x.dataAdesivamento && daysAgo(x.dataAdesivamento) <= 30 && daysAgo(x.dataAdesivamento) >= 0).length;
+  const vistorias30 = v.filter(x => [x.vistoria1,x.vistoria2,x.ultimaVistoria].some(d => d && daysAgo(d)<=30 && daysAgo(d)>=0)).length;
+
+  const sitCounts = {};
+  v.forEach(x => {
+    const key = x.situacao ? x.situacao.trim() : 'Sem status definido';
+    sitCounts[key] = (sitCounts[key]||0) + 1;
+  });
+  const sitEntries = Object.entries(sitCounts).sort((a,b)=>b[1]-a[1]).slice(0,7);
+  const sitMax = Math.max(1, ...sitEntries.map(e=>e[1]));
+
+  return `
+    <div class="topbar">
+      <div>
+        <h2>Painel geral</h2>
+        <p>Visão consolidada da fiscalização conectada 100% à nuvem Firebase.</p>
+      </div>
+      <button class="btn amber" data-nav="vistoria">+ Registrar vistoria</button>
+    </div>
+
+    ${duplicadosCount > 0 ? `<div class="alert-banner" style="background:#FFF0ED; border-left-color:#C0392B; color:#96281B;">⚠ Atenção: Foram identificados <b>${duplicadosCount} registro(s) duplicados</b> no Firebase. <button class="btn small" style="margin-left:12px; height:24px; padding:2px 8px; font-size:11px;" id="btn-dash-see-dups">Filtrar duplicados</button></div>` : ''}
+
+    <div class="cards">
+      <div class="card"><div class="label">Total no Firebase</div><div class="value">${total}</div><div class="sub">Registros em nuvem</div></div>
+      <div class="card c-amber"><div class="label">No local</div><div class="value">${noLocal}</div><div class="sub">Aguardando providências</div></div>
+      <div class="card c-green"><div class="label">Removidos</div><div class="value">${retirado}</div><div class="sub">Casos encerrados</div></div>
+      <div class="card c-blue"><div class="label">Apreendidos</div><div class="value">${apreendido}</div><div class="sub">Com apreensão feita</div></div>
+      <div class="card c-red"><div class="label">Sem 1ª vistoria</div><div class="value">${semVistoria}</div><div class="sub">Há 30+ dias adesivado</div></div>
+      <div class="card c-purple"><div class="label">Duplicados</div><div class="value">${duplicadosCount}</div><div class="sub">Mesma placa ou POP</div></div>
+      <div class="card"><div class="label">Novos (30 dias)</div><div class="value">${cadastros30}</div><div class="sub">Adesivados no mês</div></div>
+      <div class="card"><div class="label">Vistorias (30 dias)</div><div class="value">${vistorias30}</div><div class="sub">Realizadas recentemente</div></div>
+    </div>
+
+    <div class="panel">
+      <h3>Situação dos veículos</h3>
+      <div class="barlist">
+        ${sitEntries.map(([name,count]) => `
+          <div class="barrow">
+            <div class="barname" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+            <div class="bartrack"><div class="barfill" style="width:${(count/sitMax*100).toFixed(0)}%"></div></div>
+            <div class="barcount">${count}</div>
+          </div>`).join('') || '<p class="hint">Nenhum veículo registrado ainda.</p>'}
+      </div>
+    </div>
+  `;
+}
+
+function viewVistoria(){
+  return `
+    <div class="topbar">
+      <div>
+        <h2>Registrar vistoria</h2>
+        <p>Atualize uma vistoria de um veículo já cadastrado ou cadastre um novo veículo apreendido.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="radiogroup">
+        <button data-vmode="existing" class="${STATE.vistoriaMode==='existing'?'active':''}">Veículo já cadastrado</button>
+        <button data-vmode="new" class="${STATE.vistoriaMode==='new'?'active':''}">Novo veículo</button>
+      </div>
+      ${STATE.vistoriaMode==='existing' ? renderVistoriaExisting() : renderVistoriaNew()}
+    </div>
+  `;
+}
+
+function renderVistoriaExisting(){
+  return `
+    <div class="field" style="max-width:420px;">
+      <label>Buscar por placa ou nº POP</label>
+      <input type="text" id="vistoria-search" placeholder="Ex: DVN-5569 ou 902/25" autocomplete="off">
+      <div id="vistoria-search-results" style="margin-top:8px;"></div>
+    </div>
+    <div id="vistoria-form-target"></div>
+  `;
+}
+
+function renderVistoriaExistingForm(vehicle){
+  const v = vehicle;
+  return `
+    <div class="divider"></div>
+    <div style="display:flex; align-items:center; gap:16px; margin-bottom:12px;">
+      ${renderPlacaBadge(v.placa)}
+      <div>
+        <h3 style="margin:0;">${escapeHtml(v.veiculo||'Veículo')}</h3>
+        <p class="hint" style="margin:2px 0 0 0;">POP ${escapeHtml(v.pop||'—')} · Demanda: ${escapeHtml(v.dem||'—')} · SEI: ${escapeHtml(v.processoSei||'—')} · ${escapeHtml(v.endereco||'')} ${v.cidade ? '· '+escapeHtml(v.cidade):''}</p>
+      </div>
+    </div>
+
+    <form id="form-vistoria-update" data-id="${v.id}">
+      <div class="formgrid">
+        <div class="field">
+          <label>Qual vistoria / data registrar</label>
+          <select name="campo">
+            <option value="vistoria1" ${!v.vistoria1?'selected':''}>1ª Vistoria</option>
+            <option value="vistoria2">2ª Vistoria</option>
+            <option value="ultimaVistoria" selected>Última Vistoria</option>
+            <option value="intimacao">Intimação</option>
+            <option value="dataApreensao">Data de Apreensão</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Data</label>
+          <input type="date" name="data" value="${todayISO()}">
+        </div>
+        <div class="field">
+          <label>Nova situação (opcional)</label>
+          <select name="situacao">${situacaoOptions(v.situacao)}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Observação a adicionar (opcional)</label>
+        <textarea name="observacao" rows="2" placeholder="Será adicionada ao histórico de observações"></textarea>
+      </div>
+      <button class="btn amber" type="submit">Salvar vistoria no Firebase</button>
+      <button class="btn ghost" type="button" data-edit-full="${v.id}">Editar todos os campos</button>
+    </form>
+  `;
+}
+
+function renderVistoriaNew(){
+  return `
+    <form id="form-vistoria-new">
+      <div class="formgrid">
+        <div class="field">
+          <label>Nº Demanda / Ofício</label>
+          <input type="text" name="dem" placeholder="Ex: OF.016/25">
+        </div>
+        <div class="field">
+          <label>Nº POP</label>
+          <input type="text" name="pop" placeholder="Ex: 1196/25">
+        </div>
+        <div class="field">
+          <label>Nº Processo SEI</label>
+          <input type="text" name="processoSei" placeholder="Ex: 6048.2025/0002666-9">
+        </div>
+        <div class="field">
+          <label>Marca / Modelo</label>
+          <input type="text" name="veiculo" placeholder="Ex: FIAT/UNO">
+        </div>
+        <div class="field">
+          <label>Placa</label>
+          <input type="text" name="placa" placeholder="Ex: BRA2E19">
+        </div>
+        <div class="field">
+          <label>Cor</label>
+          <input type="text" name="cor">
+        </div>
+        <div class="field">
+          <label>Endereço</label>
+          <input type="text" name="endereco">
+        </div>
+
+        <div class="field">
+          <label>Data de Adesivamento</label>
+          <input type="date" name="dataAdesivamento" value="${todayISO()}">
+        </div>
+        <div class="field">
+          <label>Data Intimação</label>
+          <input type="date" name="intimacao">
+        </div>
+        <div class="field">
+          <label>1ª Vistoria</label>
+          <input type="date" name="vistoria1">
+        </div>
+        <div class="field">
+          <label>2ª Vistoria</label>
+          <input type="date" name="vistoria2">
+        </div>
+        <div class="field">
+          <label>Data Apreensão</label>
+          <input type="date" name="dataApreensao">
+        </div>
+        <div class="field">
+          <label>Última Vistoria</label>
+          <input type="date" name="ultimaVistoria">
+        </div>
+        <div class="field">
+          <label>Situação</label>
+          <select name="situacao">${situacaoOptions('NÃO VISTORIADO')}</select>
+        </div>
+
+      </div>
+      <div class="field">
+        <label>Observação</label>
+        <textarea name="observacao" rows="2"></textarea>
+      </div>
+      <button class="btn amber" type="submit">Cadastrar no Firebase</button>
+    </form>
+  `;
+}
+
+function getFilteredVehicles(){
+  const f = STATE.listFilters;
+  const dupMap = getDuplicateMap();
+  let list = STATE.vehicles.slice();
+
+  if(f.onlyDuplicates){
+    list = list.filter(v => isVehicleDuplicate(v, dupMap));
+  }
+  if(f.q){
+    const q = f.q.toLowerCase();
+    list = list.filter(v =>
+      (v.placa||'').toLowerCase().includes(q) ||
+      (v.pop||'').toLowerCase().includes(q) ||
+      (v.dem||'').toLowerCase().includes(q) ||
+      (v.processoSei||'').toLowerCase().includes(q) ||
+      (v.veiculo||'').toLowerCase().includes(q) ||
+      (v.endereco||'').toLowerCase().includes(q) ||
+      (v.cidade||'').toLowerCase().includes(q)
+    );
+  }
+  if(f.situacao){
+    list = list.filter(v => (v.situacao||'(vazio)') === f.situacao);
+  }
+  list.sort((a,b) => {
+    const av = (a[f.sortBy]||'');
+    const bv = (b[f.sortBy]||'');
+    const cmp = String(av).localeCompare(String(bv), 'pt-BR', {numeric:true});
+    return f.sortDir==='asc' ? cmp : -cmp;
+  });
+  if(f.onlyDuplicates){
+    const matches = new Set(list.map(v => v.id));
+    list = getDuplicateGroups(STATE.vehicles.filter(v => isVehicleDuplicate(v, dupMap)))
+      .filter(group => group.rows.some(v => matches.has(v.id))).flatMap(group => group.rows);
+    list.sort((a,b) => String(a[f.sortBy]||'').localeCompare(String(b[f.sortBy]||''), 'pt-BR', {numeric:true}) * (f.sortDir==='asc' ? 1 : -1));
+  }
+  return list;
+}
+
+const REPORT_FIELDS = [
+  { v:'dataAdesivamento', l:'Data de Adesivamento' },
+  { v:'intimacao', l:'Data de Intimação' },
+  { v:'vistoria1', l:'1ª Vistoria' },
+  { v:'vistoria2', l:'2ª Vistoria' },
+  { v:'ultimaVistoria', l:'Última Vistoria' },
+  { v:'dataApreensao', l:'Data de Apreensão' },
+];
+
+function viewRelatorios(){
+  const r = STATE.report;
+  const situacoes = distinctValues('situacao');
+
+  let resultsHtml = '';
+  if(r.generated){
+    const results = r.results;
+    const sitCounts = {};
+    results.forEach(v => { const k = v.situacao || 'Sem status'; sitCounts[k]=(sitCounts[k]||0)+1; });
+
+    resultsHtml = `
+      <div class="divider"></div>
+      <div class="topbar" style="margin-bottom:14px;">
+        <div>
+          <h3 style="margin:0;">Resultado — ${results.length} veículo(s)</h3>
+          <p class="hint">Filtrado por ${REPORT_FIELDS.find(f=>f.v===r.field).l}${r.from?`, a partir de ${fmtBR(r.from)}`:''}${r.to?`, até ${fmtBR(r.to)}`:''}</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn ghost small no-print" id="btn-export-csv">Exportar CSV</button>
+          <button class="btn ghost small no-print" id="btn-print">Imprimir / PDF</button>
+        </div>
+      </div>
+      <div class="cards" style="margin-bottom:16px;">
+        ${Object.entries(sitCounts).sort((a,b)=>b[1]-a[1]).map(([k,c])=>`
+          <div class="card">
+            <div class="label">${escapeHtml(k)}</div>
+            <div class="value">${c}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>POP</th><th>Nº Demanda</th><th>SEI</th><th>Marca / Modelo</th><th>Placa</th><th>${REPORT_FIELDS.find(f=>f.v===r.field).l}</th><th>Situação</th></tr>
+          </thead>
+          <tbody>
+            ${results.map(v => `
+              <tr>
+                <td class="mono">${escapeHtml(v.pop||'—')}</td>
+                <td class="mono">${escapeHtml(v.dem||'—')}</td>
+                <td class="mono" style="font-size:12.5px;">${escapeHtml(v.processoSei||extractSei(v.observacao)||'—')}</td>
+                <td>${escapeHtml(v.veiculo||'—')}</td>
+                <td>${renderPlacaBadge(v.placa)}</td>
+                <td class="mono">${fmtBR(v[r.field])}</td>
+                <td><span class="tag ${situacaoTagClass(v.situacao)}">${escapeHtml(v.situacao||'Sem status')}</span></td>
+              </tr>
+            `).join('') || `<tr><td colspan="7"><div class="empty">Nenhum registro encontrado para os filtros escolhidos.</div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="topbar no-print">
+      <div>
+        <h2>Relatórios</h2>
+        <p>Gere relatórios filtrando por período e situação.</p>
+      </div>
+    </div>
+
+    <div class="panel no-print">
+      <h3>Filtros</h3>
+      <form id="form-relatorio">
+        <div class="formgrid">
+          <div class="field">
+            <label>Campo de data</label>
+            <select name="field">
+              ${REPORT_FIELDS.map(f=>`<option value="${f.v}" ${r.field===f.v?'selected':''}>${f.l}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>De</label>
+            <input type="date" name="from" value="${r.from}">
+          </div>
+          <div class="field">
+            <label>Até</label>
+            <input type="date" name="to" value="${r.to}">
+          </div>
+          <div class="field">
+            <label>Situação</label>
+            <select name="situacao">
+              <option value="">Todas</option>
+              ${situacoes.map(s=>`<option value="${escapeHtml(s)}" ${r.situacao===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>Cidade contém</label>
+            <input type="text" name="cidade" value="${escapeHtml(r.cidade)}" placeholder="Ex: São Paulo">
+          </div>
+        </div>
+        <button class="btn amber" type="submit">Gerar relatório</button>
+      </form>
+    </div>
+
+    <div class="panel report-results">
+      ${resultsHtml || '<p class="hint">Configure os filtros acima e clique em "Gerar relatório".</p>'}
+    </div>
+  `;
+}
+
+function findVehicle(id){ return STATE.vehicles.find(v => v.id===id); }
+
+async function updateVehicleField(id, patch){
+  const v = findVehicle(id);
+  if(!v) return;
+  const updated = Object.assign({}, v, patch, { updatedAt: todayISO() });
+  await syncVehicleToFirestore(updated);
+}
+
+async function addVehicle(data){
+  const newV = Object.assign({
+    id: uid(), dem:null, pop:null, processoSei:null, veiculo:null, placa:null, cor:null, endereco:null, cidade:null,
+    dataAdesivamento:null, vistoria1:null, intimacao:null, vistoria2:null, ultimaVistoria:null,
+    dataApreensao:null, situacao:'NÃO VISTORIADO', origemDenuncia:null, observacao:null,
+    createdAt: todayISO(), updatedAt: todayISO()
+  }, data);
+  await syncVehicleToFirestore(newV);
+  return newV;
+}
+
+async function deleteVehicle(id){
+  await removeVehicleFromFirestore(id);
+}
+
+function openDetailsModal(id){
+  const v = findVehicle(id);
+  if(!v) return;
+  const sei = v.processoSei || extractSei(v.observacao) || '—';
+  const dupMap = getDuplicateMap();
+  const isDup = isVehicleDuplicate(v, dupMap);
+  const dupReason = isDup ? getDuplicateReason(v, dupMap) : '';
+
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `
+    <div class="modal">
+      <button class="close" data-close-modal title="Fechar">&times;</button>
+      <div style="display:flex; align-items:center; gap:16px; margin-bottom:12px;">
+        ${renderPlacaBadge(v.placa)}
+        <div>
+          <h3 style="margin:0;">${escapeHtml(v.veiculo||'Veículo')}</h3>
+          <p class="hint" style="margin:2px 0 0 0;">POP: <b>${escapeHtml(v.pop||'—')}</b> &nbsp;|&nbsp; Situação: <span class="tag ${situacaoTagClass(v.situacao)}">${escapeHtml(v.situacao||'Sem status')}</span></p>
+        </div>
+      </div>
+
+      ${isDup ? `<div class="alert-banner" style="margin-bottom:14px;">⚠ <b>Registro Duplicado:</b> ${escapeHtml(dupReason)}.</div>` : ''}
+
+      <div class="detail-section">
+        <h4>Identificação & Localização</h4>
+        <div class="detail-grid">
+          <div class="detail-item"><span class="lbl">Marca / Modelo</span><span class="val">${escapeHtml(v.veiculo||'—')}</span></div>
+          <div class="detail-item"><span class="lbl">Placa</span><span class="val mono">${escapeHtml(v.placa||'—')}</span></div>
+          <div class="detail-item"><span class="lbl">Cor</span><span class="val">${escapeHtml(v.cor||'—')}</span></div>
+          <div class="detail-item"><span class="lbl">Endereço</span><span class="val">${escapeHtml(v.endereco||'—')}</span></div>
+          <div class="detail-item"><span class="lbl">Cidade / UF</span><span class="val">${escapeHtml(v.cidade||'—')}</span></div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <h4>Processo & Fiscalização</h4>
+        <div class="detail-grid">
+          <div class="detail-item"><span class="lbl">Nº Demanda / Ofício</span><span class="val mono">${escapeHtml(v.dem||'—')}</span></div>
+          <div class="detail-item"><span class="lbl">Nº Processo SEI</span><span class="val mono">${escapeHtml(sei)}</span></div>
+          <div class="detail-item"><span class="lbl">Nº POP</span><span class="val mono">${escapeHtml(v.pop||'—')}</span></div>
+          <div class="detail-item"><span class="lbl">Origem da Denúncia</span><span class="val">${escapeHtml(v.origemDenuncia||'—')}</span></div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <h4>Datas & Vistorias</h4>
+        <div class="detail-grid">
+          <div class="detail-item"><span class="lbl">Data Adesivamento</span><span class="val mono">${fmtBR(v.dataAdesivamento)}</span></div>
+          <div class="detail-item"><span class="lbl">Data Intimação</span><span class="val mono">${fmtBR(v.intimacao)}</span></div>
+          <div class="detail-item"><span class="lbl">1ª Vistoria</span><span class="val mono">${fmtBR(v.vistoria1)}</span></div>
+          <div class="detail-item"><span class="lbl">2ª Vistoria</span><span class="val mono">${fmtBR(v.vistoria2)}</span></div>
+          <div class="detail-item"><span class="lbl">Data Última Vistoria</span><span class="val mono">${fmtBR(v.ultimaVistoria)}</span></div>
+          <div class="detail-item"><span class="lbl">Data de Apreensão</span><span class="val mono">${fmtBR(v.dataApreensao)}</span></div>
+        </div>
+      </div>
+
+      ${v.observacao ? `
+        <div class="detail-section">
+          <h4>Observações</h4>
+          <p style="margin:0; font-size:13.5px; line-height:1.5; white-space:pre-wrap;">${escapeHtml(v.observacao)}</p>
+        </div>` : ''
+      }
+
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+        <button class="btn amber small" id="btn-popup-edit">Editar dados</button>
+        <button class="btn ghost small" data-close-modal>Fechar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(bg);
+  bg.querySelectorAll('[data-close-modal]').forEach(el => el.addEventListener('click', ()=> bg.remove()));
+  bg.addEventListener('click', (e)=> { if(e.target===bg) bg.remove(); });
+  bg.querySelector('#btn-popup-edit').addEventListener('click', ()=>{
+    bg.remove();
+    openEditModal(id);
+  });
+}
+
+function openEditModal(id){
+  const v = findVehicle(id);
+  if(!v) return;
+  const seiVal = v.processoSei || extractSei(v.observacao) || '';
+
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `
+    <div class="modal">
+      <button class="close" data-close-modal title="Fechar">&times;</button>
+      <h3>Editar veículo</h3>
+      <p class="hint" style="margin-bottom:16px;">POP ${escapeHtml(v.pop||'—')}</p>
+      <form id="form-edit-full">
+        <div class="formgrid">
+          <div class="field"><label>Nº Demanda / Ofício</label><input type="text" name="dem" value="${escapeHtml(v.dem||'')}"></div>
+          <div class="field"><label>Nº POP</label><input type="text" name="pop" value="${escapeHtml(v.pop||'')}"></div>
+          <div class="field"><label>Nº Processo SEI</label><input type="text" name="processoSei" value="${escapeHtml(seiVal)}"></div>
+          <div class="field"><label>Marca / Modelo</label><input type="text" name="veiculo" value="${escapeHtml(v.veiculo||'')}"></div>
+          <div class="field"><label>Placa</label><input type="text" name="placa" value="${escapeHtml(v.placa||'')}"></div>
+          <div class="field"><label>Cor</label><input type="text" name="cor" value="${escapeHtml(v.cor||'')}"></div>
+        </div>
+        <div class="formgrid two">
+          <div class="field"><label>Endereço</label><input type="text" name="endereco" value="${escapeHtml(v.endereco||'')}"></div>
+        </div>
+        <div class="formgrid">
+          <div class="field"><label>Data Adesivamento</label><input type="date" name="dataAdesivamento" value="${v.dataAdesivamento||''}"></div>
+          <div class="field"><label>Data Intimação</label><input type="date" name="intimacao" value="${v.intimacao||''}"></div>
+          <div class="field"><label>1ª Vistoria</label><input type="date" name="vistoria1" value="${v.vistoria1||''}"></div>
+          <div class="field"><label>2ª Vistoria</label><input type="date" name="vistoria2" value="${v.vistoria2||''}"></div>
+          <div class="field"><label>Data Última Vistoria</label><input type="date" name="ultimaVistoria" value="${v.ultimaVistoria||''}"></div>
+          <div class="field"><label>Data Apreensão</label><input type="date" name="dataApreensao" value="${v.dataApreensao||''}"></div>
+        </div>
+        <div class="formgrid two">
+          <div class="field">
+            <label>Situação</label>
+            <select name="situacao">${situacaoOptions(v.situacao)}</select>
+          </div>
+        </div>
+        <div class="field"><label>Observação</label><textarea name="observacao" rows="3">${escapeHtml(v.observacao||'')}</textarea></div>
+        <button class="btn amber" type="submit">Salvar alterações</button>
+        <button class="btn ghost" type="button" data-close-modal>Cancelar</button>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(bg);
+  bg.querySelectorAll('[data-close-modal]').forEach(el => el.addEventListener('click', ()=> bg.remove()));
+  bg.addEventListener('click', (e)=> { if(e.target===bg) bg.remove(); });
+  bindSeiInputs(bg);
+  bg.querySelector('#form-edit-full').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const patch = {};
+    for(const [k,val] of fd.entries()){ patch[k] = val.trim() || null; }
+    const button = e.target.querySelector('[type="submit"]');
+    button.disabled = true;
+    try {
+      await updateVehicleField(id, patch);
+      bg.remove();
+    } catch(error){
+      showToast("Não foi possível salvar: " + error.message);
+    } finally { button.disabled = false; }
+  });
+}
+
+function exportCSV(rows, field){
+  const headers = ['POP','Nº Demanda','Nº Processo SEI','Marca / Modelo','Placa','Cor','Endereço','Cidade','Data Adesivamento','Data Intimação','1ª Vistoria','2ª Vistoria','Última Vistoria','Data Apreensão','Situação','Origem Denúncia','Observação'];
+  const keys = ['pop','dem','processoSei','veiculo','placa','cor','endereco','cidade','dataAdesivamento','intimacao','vistoria1','vistoria2','ultimaVistoria','dataApreensao','situacao','origemDenuncia','observacao'];
+  const lines = [headers.join(';')];
+  rows.forEach(v => {
+    const line = keys.map(k => {
+      let val = v[k] || (k==='processoSei' ? extractSei(v.observacao) : '') || '';
+      if(['dataAdesivamento','intimacao','vistoria1','vistoria2','ultimaVistoria','dataApreensao'].includes(k)) val = fmtBR(val)==='—' ? '' : fmtBR(val);
+      val = String(val).replace(/;/g,',').replace(/\n/g,' ');
+      return val;
+    });
+    lines.push(line.join(';'));
+  });
+  const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `relatorio_veiculos_${todayISO()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function bindEvents(){
+  bindProcessEvents();
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  sidebarToggle.addEventListener('click', () => {
+    STATE.sidebarCollapsed = !STATE.sidebarCollapsed;
+    document.getElementById('sidebar').classList.toggle('collapsed', STATE.sidebarCollapsed);
+    sidebarToggle.textContent = STATE.sidebarCollapsed ? '›' : '‹';
+    const label = STATE.sidebarCollapsed ? 'Expandir menu' : 'Recolher menu';
+    sidebarToggle.title = label;
+    sidebarToggle.setAttribute('aria-label', label);
+    sidebarToggle.setAttribute('aria-expanded', String(!STATE.sidebarCollapsed));
+  });
+  document.querySelectorAll('[data-nav]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      STATE.view = btn.getAttribute('data-nav');
+      if(STATE.view==='vistoria'){ STATE.vistoriaMode = STATE.vistoriaMode||'existing'; }
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-vmode]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      STATE.vistoriaMode = btn.getAttribute('data-vmode');
+      render();
+    });
+  });
+
+  const fileInput = document.getElementById('file-import-input');
+  const triggerImport = () => fileInput && fileInput.click();
+
+  const btnTopImport = document.getElementById('btn-topbar-import');
+  if(btnTopImport) btnTopImport.addEventListener('click', triggerImport);
+
+  const btnSideImport = document.getElementById('btn-sidebar-import');
+  if(btnSideImport) btnSideImport.addEventListener('click', triggerImport);
+
+  if(fileInput){
+    fileInput.onchange = (e) => {
+      if(e.target.files && e.target.files[0]){
+        handleImportFile(e.target.files[0]);
+        e.target.value = '';
+      }
+    };
+  }
+
+  const btnDashDups = document.getElementById('btn-dash-see-dups');
+  if(btnDashDups){
+    btnDashDups.addEventListener('click', ()=>{
+      STATE.view = 'veiculos';
+      STATE.listFilters.onlyDuplicates = true;
+      STATE.listFilters.page = 1;
+      render();
+    });
+  }
+
+  const btnToggleDups = document.getElementById('btn-toggle-duplicates');
+  if(btnToggleDups){
+    btnToggleDups.addEventListener('click', ()=>{
+      STATE.listFilters.onlyDuplicates = !STATE.listFilters.onlyDuplicates;
+      STATE.listFilters.page = 1;
+      render();
+    });
+  }
+
+  const searchInput = document.getElementById('vistoria-search');
+  if(searchInput){
+    searchInput.addEventListener('input', ()=>{
+      const q = searchInput.value.trim().toLowerCase();
+      const resultsBox = document.getElementById('vistoria-search-results');
+      const target = document.getElementById('vistoria-form-target');
+      target.innerHTML = '';
+      if(q.length < 2){ resultsBox.innerHTML=''; return; }
+      const matches = STATE.vehicles.filter(v =>
+        (v.placa||'').toLowerCase().includes(q) || (v.pop||'').toLowerCase().includes(q)
+      ).slice(0,8);
+      resultsBox.innerHTML = matches.map(v => `
+        <button type="button" class="btn ghost small" style="margin:3px 6px 0 0;" data-pick-vehicle="${v.id}">
+          ${escapeHtml(v.pop||'')} · ${escapeHtml(v.placa||'s/placa')} · ${escapeHtml(v.veiculo||'')}
+        </button>
+      `).join('') || '<p class="hint">Nenhum veículo encontrado.</p>';
+      resultsBox.querySelectorAll('[data-pick-vehicle]').forEach(b=>{
+        b.addEventListener('click', ()=>{
+          const vh = findVehicle(b.getAttribute('data-pick-vehicle'));
+          document.getElementById('vistoria-form-target').innerHTML = renderVistoriaExistingForm(vh);
+          bindVistoriaUpdateForm();
+        });
+      });
+    });
+  }
+  bindVistoriaUpdateForm();
+
+  const formNew = document.getElementById('form-vistoria-new');
+  if(formNew){
+    formNew.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const fd = new FormData(formNew);
+      const data = {};
+      for(const [k,val] of fd.entries()){ data[k] = val.trim() || null; }
+      if(!data.pop && !data.placa){
+        showToast('Informe ao menos o nº POP ou a placa.');
+        return;
+      }
+      await addVehicle(data);
+      STATE.view = 'veiculos';
+      STATE.listFilters.q = data.pop || data.placa || '';
+      STATE.listFilters.page = 1;
+      render();
+    });
+  }
+
+  const listSearch = document.getElementById('list-search');
+  if(listSearch){
+    listSearch.addEventListener('input', ()=>{
+      STATE.listFilters.q = listSearch.value;
+      STATE.listFilters.page = 1;
+      render();
+      document.getElementById('list-search').focus();
+      const val = document.getElementById('list-search').value;
+      document.getElementById('list-search').setSelectionRange(val.length, val.length);
+    });
+  }
+  const listSituacao = document.getElementById('list-situacao');
+  if(listSituacao){
+    listSituacao.addEventListener('change', ()=>{
+      STATE.listFilters.situacao = listSituacao.value;
+      STATE.listFilters.page = 1;
+      render();
+    });
+  }
+  document.querySelectorAll('[data-sort]').forEach(button => {
+    button.addEventListener('click', () => { toggleTableSort(button.dataset.sort); render(); });
+  });
+  const listSort = document.getElementById('list-sort');
+  if(listSort){
+    listSort.addEventListener('change', ()=>{
+      STATE.listFilters.sortBy = listSort.value;
+      STATE.listFilters.sortDir = 'asc';
+      STATE.listFilters.page = 1;
+      render();
+    });
+  }
+  const pgPrev = document.getElementById('pg-prev');
+  if(pgPrev) pgPrev.addEventListener('click', ()=>{ STATE.listFilters.page--; render(); });
+  const pgNext = document.getElementById('pg-next');
+  if(pgNext) pgNext.addEventListener('click', ()=>{ STATE.listFilters.page++; render(); });
+
+  document.querySelectorAll('[data-view-details]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openDetailsModal(btn.getAttribute('data-view-details')));
+  });
+  document.querySelectorAll('[data-edit-full]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openEditModal(btn.getAttribute('data-edit-full')));
+  });
+  document.querySelectorAll('[data-delete]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-delete');
+      const v = findVehicle(id);
+      if(await confirmSystem(`Excluir definitivamente o registro ${v.placa||v.pop||''}? Esta ação apagará da nuvem Firebase.`)){
+        await deleteVehicle(id);
+      }
+    });
+  });
+
+  const formRel = document.getElementById('form-relatorio');
+  if(formRel){
+    formRel.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const fd = new FormData(formRel);
+      const field = fd.get('field');
+      const from = fd.get('from');
+      const to = fd.get('to');
+      const situacao = fd.get('situacao');
+      const cidade = (fd.get('cidade')||'').trim().toLowerCase();
+
+      let results = STATE.vehicles.filter(v => {
+        const dv = v[field];
+        if(from && (!dv || dv < from)) return false;
+        if(to && (!dv || dv > to)) return false;
+        if(situacao && v.situacao !== situacao) return false;
+        if(cidade && !(v.cidade||'').toLowerCase().includes(cidade)) return false;
+        return true;
+      });
+      results.sort((a,b)=> String(a[field]||'').localeCompare(String(b[field]||'')));
+
+      STATE.report = { field, from, to, situacao, cidade, generated:true, results };
+      render();
+    });
+  }
+  const btnCsv = document.getElementById('btn-export-csv');
+  if(btnCsv) btnCsv.addEventListener('click', ()=> exportCSV(STATE.report.results, STATE.report.field));
+  const btnPrint = document.getElementById('btn-print');
+  if(btnPrint) btnPrint.addEventListener('click', ()=> window.print());
+}
+
+function bindVistoriaUpdateForm(){
+  const form = document.getElementById('form-vistoria-update');
+  if(!form) return;
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const id = form.getAttribute('data-id');
+    const fd = new FormData(form);
+    const campo = fd.get('campo');
+    const data = fd.get('data');
+    const situacao = fd.get('situacao');
+    const novaObs = fd.get('observacao');
+    const v = findVehicle(id);
+    const patch = { [campo]: data || null };
+    if(situacao && situacao.trim()) patch.situacao = situacao.trim();
+    if(novaObs && novaObs.trim()){
+      const dataFmt = fmtBR(todayISO());
+      patch.observacao = (v.observacao ? v.observacao + ' | ' : '') + `[${dataFmt}] ${novaObs.trim()}`;
+    }
+    await updateVehicleField(id, patch);
+    STATE.view = 'veiculos';
+    STATE.listFilters.q = v.placa || v.pop || '';
+  });
+  form.querySelectorAll('[data-edit-full]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openEditModal(btn.getAttribute('data-edit-full')));
+  });
+}
+
+// Inicialização imediata
+render();
+initFirebase();
+</script>
+</body>
+</html>
