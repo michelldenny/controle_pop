@@ -462,7 +462,7 @@
   .toolbar .field{ margin-bottom:0; min-width:160px; }
   .toolbar .grow{ flex:1; min-width:220px; }
 
-  .pager{ display:flex; align-items:center; gap:10px; justify-content:flex-end; margin-top:12px; font-size:13px; color:var(--ink-soft);}
+  .pager{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; justify-content:flex-end; margin-top:12px; font-size:13px; color:var(--ink-soft);}
 
   .empty{ text-align:center; padding: 40px 20px; color:var(--ink-soft); }
   .empty .big{ font-family:var(--font-head); font-size:22px; color:var(--ink); margin-bottom:4px;}
@@ -1018,7 +1018,6 @@ function handleImportFile(file){
         const dataAdesivamento = xlSerialToISO(getColFromRow(row, 'data adesivamento', 'adesivamento'));
         const intimacao        = xlSerialToISO(getColFromRow(row, 'data intimacao', 'intimacao'));
         const vistoria1        = xlSerialToISO(getColFromRow(row, 'data 1a vistoria', '1a vistoria', 'data 1 vistoria', 'vistoria1'));
-        const vistoria2        = xlSerialToISO(getColFromRow(row, '2a vist.', '2a vistoria', 'vistoria2'));
         const ultimaVistoria   = xlSerialToISO(getColFromRow(row, 'data ultima vistoria', 'ultima vistoria'));
         const dataApreensao    = xlSerialToISO(getColFromRow(row, 'data apreens.', 'data apreensao', 'apreensao'));
 
@@ -1035,7 +1034,6 @@ function handleImportFile(file){
           dataAdesivamento,
           intimacao,
           vistoria1,
-          vistoria2,
           ultimaVistoria,
           dataApreensao,
           situacao,
@@ -1143,11 +1141,11 @@ function openImportPreviewModal(vehiclesList){
    RENDER — SHELL
    ========================================================= */
 const NAV_ITEMS = [
-  { id: 'processos', label: 'Processos' },
-  { id: 'abertura-pop', label: 'Abertura de POP' },
   { id:'veiculos', label:'Veículos' },
+  { id:'abertura-pop', label:'Abertura POP' },
   { id:'dashboard', label:'Painel' },
   { id:'vistoria', label:'Registrar Vistoria' },
+  { id:'processos', label:'Processos' },
   { id:'relatorios', label:'Relatórios' },
 ];
 
@@ -1255,7 +1253,7 @@ function viewProcessos(){
   return `<div class="topbar"><div><h2>Processos</h2><p>${rows.length} de ${STATE.processes.length} processos cadastrados</p></div><button class="btn amber" id="process-new">+ Novo processo</button></div>
   ${STATE.processError ? '<div class="alert-banner">Não foi possível carregar os processos: '+escapeHtml(STATE.processError)+'</div>' : ''}
   <div class="panel"><div class="formgrid">
-  <div class="field"><label for="process-search">Buscar processos</label><input id="process-search" type="search" placeholder="SEI, demanda, POP, endereço..." value="${escapeHtml(f.q)}"></div>
+  <div class="field"><label for="process-search">Buscar processos</label><input id="process-search" type="search" placeholder="Buscar em todas as colunas…" value="${escapeHtml(f.q)}"></div>
   <div class="field"><label for="process-origin-filter">Origem da denúncia</label><select id="process-origin-filter">${processOptions(PROCESS_ORIGINS,f.origemDenuncia,'Todas as origens')}</select></div>
   <div class="field"><label for="process-status-filter">Status</label><select id="process-status-filter">${processOptions(PROCESS_STATUSES,f.status,'Todos os status')}</select></div>
   </div></div>
@@ -1360,7 +1358,7 @@ function viewVeiculos(){
 
     <div class="toolbar">
       <div class="field grow">
-        <label>Buscar (placa, POP, demanda, SEI, marca, endereço, cidade)</label>
+        <label>Buscar em todas as colunas</label>
         <input type="text" id="list-search" value="${escapeHtml(f.q)}" placeholder="Digite para buscar…">
       </div>
       <div class="field">
@@ -1446,8 +1444,14 @@ function viewVeiculos(){
 
     <div class="pager">
       <span>Página ${f.page} de ${totalPages}</span>
+      <button type="button" class="btn ghost small" data-page="1" ${f.page<=1?'disabled':''}>Primeira</button>
       <button class="btn ghost small" id="pg-prev" ${f.page<=1?'disabled':''}>Anterior</button>
+      <form id="pg-jump" style="display:flex; gap:6px; align-items:center;">
+        <input type="number" name="page" aria-label="Número da página" min="1" max="${totalPages}" value="${f.page}" required style="width:75px;">
+        <button type="submit" class="btn ghost small">Ir</button>
+      </form>
       <button class="btn ghost small" id="pg-next" ${f.page>=totalPages?'disabled':''}>Próxima</button>
+      <button type="button" class="btn ghost small" data-page="${totalPages}" ${f.page>=totalPages?'disabled':''}>Última</button>
     </div>
   `;
 }
@@ -1462,7 +1466,7 @@ function viewDashboard(){
   const semVistoria = v.filter(x => !x.vistoria1 && x.dataAdesivamento && daysAgo(x.dataAdesivamento) >= 30 && !(x.situacao||'').toUpperCase().includes('REMOVIDO')).length;
   const duplicadosCount = v.filter(x => isVehicleDuplicate(x, dupMap)).length;
   const cadastros30 = v.filter(x => x.dataAdesivamento && daysAgo(x.dataAdesivamento) <= 30 && daysAgo(x.dataAdesivamento) >= 0).length;
-  const vistorias30 = v.filter(x => [x.vistoria1,x.vistoria2,x.ultimaVistoria].some(d => d && daysAgo(d)<=30 && daysAgo(d)>=0)).length;
+  const vistorias30 = v.filter(x => [x.vistoria1,x.ultimaVistoria].some(d => d && daysAgo(d)<=30 && daysAgo(d)>=0)).length;
 
   const sitCounts = {};
   v.forEach(x => {
@@ -1555,8 +1559,7 @@ function renderVistoriaExistingForm(vehicle){
         <div class="field">
           <label>Qual vistoria / data registrar</label>
           <select name="campo">
-            <option value="vistoria1" ${!v.vistoria1?'selected':''}>1ª Vistoria</option>
-            <option value="vistoria2">2ª Vistoria</option>
+            <option value="vistoria1" ${!v.vistoria1?'selected':''}>Data 1ª Vistoria</option>
             <option value="ultimaVistoria" selected>Última Vistoria</option>
             <option value="intimacao">Intimação</option>
             <option value="dataApreensao">Data de Apreensão</option>
@@ -1623,12 +1626,8 @@ function renderVistoriaNew(){
           <input type="date" name="intimacao">
         </div>
         <div class="field">
-          <label>1ª Vistoria</label>
+          <label>Data 1ª Vistoria</label>
           <input type="date" name="vistoria1">
-        </div>
-        <div class="field">
-          <label>2ª Vistoria</label>
-          <input type="date" name="vistoria2">
         </div>
         <div class="field">
           <label>Data Apreensão</label>
@@ -1661,17 +1660,17 @@ function getFilteredVehicles(){
   if(f.onlyDuplicates){
     list = list.filter(v => isVehicleDuplicate(v, dupMap));
   }
-  if(f.q){
-    const q = f.q.toLowerCase();
-    list = list.filter(v =>
-      (v.placa||'').toLowerCase().includes(q) ||
-      (v.pop||'').toLowerCase().includes(q) ||
-      (v.dem||'').toLowerCase().includes(q) ||
-      (v.processoSei||'').toLowerCase().includes(q) ||
-      (v.veiculo||'').toLowerCase().includes(q) ||
-      (v.endereco||'').toLowerCase().includes(q) ||
-      (v.cidade||'').toLowerCase().includes(q)
-    );
+  const query = f.q.trim();
+  const normalizedQuery = normalizeProcessSearch(query);
+  if(query){
+    list = list.filter(vehicle => Object.entries(vehicle).some(([field, value]) => {
+      if (field === 'vistoria2' || value == null) return false;
+      const raw = String(value);
+      const candidates = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? [raw, fmtBR(raw)] : [raw];
+      return candidates.some(candidate => normalizedQuery
+        ? normalizeProcessSearch(candidate).includes(normalizedQuery)
+        : candidate.toLowerCase().includes(query.toLowerCase()));
+    }));
   }
   if(f.situacao){
     list = list.filter(v => (v.situacao||'(vazio)') === f.situacao);
@@ -1694,8 +1693,7 @@ function getFilteredVehicles(){
 const REPORT_FIELDS = [
   { v:'dataAdesivamento', l:'Data de Adesivamento' },
   { v:'intimacao', l:'Data de Intimação' },
-  { v:'vistoria1', l:'1ª Vistoria' },
-  { v:'vistoria2', l:'2ª Vistoria' },
+  { v:'vistoria1', l:'Data 1ª Vistoria' },
   { v:'ultimaVistoria', l:'Última Vistoria' },
   { v:'dataApreensao', l:'Data de Apreensão' },
 ];
@@ -1759,6 +1757,7 @@ function viewRelatorios(){
         <h2>Relatórios</h2>
         <p>Gere relatórios filtrando por período e situação.</p>
       </div>
+      <button type="button" class="btn ghost small" id="btn-export-excel">Exportar banco em Excel</button>
     </div>
 
     <div class="panel no-print">
@@ -1813,7 +1812,7 @@ async function updateVehicleField(id, patch){
 async function addVehicle(data){
   const newV = Object.assign({
     id: uid(), dem:null, pop:null, processoSei:null, veiculo:null, placa:null, cor:null, endereco:null, cidade:null,
-    dataAdesivamento:null, vistoria1:null, intimacao:null, vistoria2:null, ultimaVistoria:null,
+    dataAdesivamento:null, vistoria1:null, intimacao:null, ultimaVistoria:null,
     dataApreensao:null, situacao:'NÃO VISTORIADO', origemDenuncia:null, observacao:null,
     createdAt: todayISO(), updatedAt: todayISO()
   }, data);
@@ -1874,8 +1873,7 @@ function openDetailsModal(id){
         <div class="detail-grid">
           <div class="detail-item"><span class="lbl">Data Adesivamento</span><span class="val mono">${fmtBR(v.dataAdesivamento)}</span></div>
           <div class="detail-item"><span class="lbl">Data Intimação</span><span class="val mono">${fmtBR(v.intimacao)}</span></div>
-          <div class="detail-item"><span class="lbl">1ª Vistoria</span><span class="val mono">${fmtBR(v.vistoria1)}</span></div>
-          <div class="detail-item"><span class="lbl">2ª Vistoria</span><span class="val mono">${fmtBR(v.vistoria2)}</span></div>
+          <div class="detail-item"><span class="lbl">Data 1ª Vistoria</span><span class="val mono">${fmtBR(v.vistoria1)}</span></div>
           <div class="detail-item"><span class="lbl">Data Última Vistoria</span><span class="val mono">${fmtBR(v.ultimaVistoria)}</span></div>
           <div class="detail-item"><span class="lbl">Data de Apreensão</span><span class="val mono">${fmtBR(v.dataApreensao)}</span></div>
         </div>
@@ -1930,8 +1928,7 @@ function openEditModal(id){
         <div class="formgrid">
           <div class="field"><label>Data Adesivamento</label><input type="date" name="dataAdesivamento" value="${v.dataAdesivamento||''}"></div>
           <div class="field"><label>Data Intimação</label><input type="date" name="intimacao" value="${v.intimacao||''}"></div>
-          <div class="field"><label>1ª Vistoria</label><input type="date" name="vistoria1" value="${v.vistoria1||''}"></div>
-          <div class="field"><label>2ª Vistoria</label><input type="date" name="vistoria2" value="${v.vistoria2||''}"></div>
+          <div class="field"><label>Data 1ª Vistoria</label><input type="date" name="vistoria1" value="${v.vistoria1||''}"></div>
           <div class="field"><label>Data Última Vistoria</label><input type="date" name="ultimaVistoria" value="${v.ultimaVistoria||''}"></div>
           <div class="field"><label>Data Apreensão</label><input type="date" name="dataApreensao" value="${v.dataApreensao||''}"></div>
         </div>
@@ -1967,14 +1964,49 @@ function openEditModal(id){
   });
 }
 
+function firestoreSheet(snapshot){
+  const records = snapshot.docs.map(doc => [doc.id, doc.data()]);
+  const fields = [...new Set(records.flatMap(([, data]) => Object.keys(data)))].filter(field => field !== 'vistoria2').sort();
+  const rows = records.map(([id, data]) => [id, ...fields.map(field => {
+    if (!Object.prototype.hasOwnProperty.call(data, field)) return '';
+    const value = data[field];
+    if (value == null) return '';
+    if (typeof value.toDate === 'function') return value.toDate().toISOString();
+    if (typeof value === 'object') return JSON.stringify(value);
+    return value;
+  })]);
+  return XLSX.utils.aoa_to_sheet([['ID do documento', ...fields.map(field => field === 'vistoria1' ? 'Data 1ª Vistoria' : field)], ...rows]);
+}
+
+async function exportDatabaseExcel(button){
+  button.disabled = true;
+  try {
+    if (!veiculosCol || !processosCol) throw new Error('Firebase indisponível.');
+    if (typeof XLSX === 'undefined') throw new Error('Biblioteca de Excel indisponível.');
+    const [vehicles, processes] = await Promise.all([
+      veiculosCol.get({ source: 'server' }),
+      processosCol.get({ source: 'server' })
+    ]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, firestoreSheet(vehicles), 'Veículos');
+    XLSX.utils.book_append_sheet(workbook, firestoreSheet(processes), 'Processos');
+    XLSX.writeFile(workbook, `controle_pop_${todayISO()}.xlsx`);
+    showToast('Planilha Excel exportada.');
+  } catch (error) {
+    showToast('Erro ao exportar Excel: ' + (error.message || error.code));
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function exportCSV(rows, field){
-  const headers = ['POP','Nº Demanda','Nº Processo SEI','Marca / Modelo','Placa','Cor','Endereço','Cidade','Data Adesivamento','Data Intimação','1ª Vistoria','2ª Vistoria','Última Vistoria','Data Apreensão','Situação','Origem Denúncia','Observação'];
-  const keys = ['pop','dem','processoSei','veiculo','placa','cor','endereco','cidade','dataAdesivamento','intimacao','vistoria1','vistoria2','ultimaVistoria','dataApreensao','situacao','origemDenuncia','observacao'];
+  const headers = ['POP','Nº Demanda','Nº Processo SEI','Marca / Modelo','Placa','Cor','Endereço','Cidade','Data Adesivamento','Data Intimação','Data 1ª Vistoria','Última Vistoria','Data Apreensão','Situação','Origem Denúncia','Observação'];
+  const keys = ['pop','dem','processoSei','veiculo','placa','cor','endereco','cidade','dataAdesivamento','intimacao','vistoria1','ultimaVistoria','dataApreensao','situacao','origemDenuncia','observacao'];
   const lines = [headers.join(';')];
   rows.forEach(v => {
     const line = keys.map(k => {
       let val = v[k] || (k==='processoSei' ? extractSei(v.observacao) : '') || '';
-      if(['dataAdesivamento','intimacao','vistoria1','vistoria2','ultimaVistoria','dataApreensao'].includes(k)) val = fmtBR(val)==='—' ? '' : fmtBR(val);
+      if(['dataAdesivamento','intimacao','vistoria1','ultimaVistoria','dataApreensao'].includes(k)) val = fmtBR(val)==='—' ? '' : fmtBR(val);
       val = String(val).replace(/;/g,',').replace(/\n/g,' ');
       return val;
     });
@@ -2132,6 +2164,18 @@ function bindEvents(){
       render();
     });
   }
+  const pageJump = document.getElementById('pg-jump');
+  if(pageJump) pageJump.addEventListener('submit', event => {
+    event.preventDefault();
+    STATE.listFilters.page = pageJump.elements.page.valueAsNumber;
+    render();
+  });
+  document.querySelectorAll('[data-page]').forEach(button => {
+    button.addEventListener('click', () => {
+      STATE.listFilters.page = Number(button.dataset.page);
+      render();
+    });
+  });
   const pgPrev = document.getElementById('pg-prev');
   if(pgPrev) pgPrev.addEventListener('click', ()=>{ STATE.listFilters.page--; render(); });
   const pgNext = document.getElementById('pg-next');
@@ -2179,6 +2223,8 @@ function bindEvents(){
     });
   }
   const btnCsv = document.getElementById('btn-export-csv');
+  const btnExcel = document.getElementById('btn-export-excel');
+  if(btnExcel) btnExcel.addEventListener('click', () => exportDatabaseExcel(btnExcel));
   if(btnCsv) btnCsv.addEventListener('click', ()=> exportCSV(STATE.report.results, STATE.report.field));
   const btnPrint = document.getElementById('btn-print');
   if(btnPrint) btnPrint.addEventListener('click', ()=> window.print());
