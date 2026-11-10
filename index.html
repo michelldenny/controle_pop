@@ -583,7 +583,7 @@ let STATE = {
   sidebarCollapsed: window.matchMedia ? window.matchMedia('(max-width: 980px)').matches : false,
   processes: [],
   processEditingId: null,
-  processFilters: {q:'', origemDenuncia:'', status:'', sortBy:'', sortDir:'asc'},
+  processFilters: {q:'', status:'', sortBy:'', sortDir:'asc'},
   processError: '',
   vehicles: [], // Obtido exclusivamente do Firestore
   view: 'veiculos',
@@ -909,6 +909,66 @@ window.reconectarFirebase = function(){
 /* =========================================================
    MÓDULO DE IMPORTAÇÃO DE PLANILHA (EXCEL / CSV)
    ========================================================= */
+const VEHICLE_COLUMNS = [
+  ['dem', 'Nº DEMANDA / OFÍCIO', ['demanda', 'dem', 'nº demanda', 'ofício']],
+  ['pop', 'Nº POP', ['pop', 'no pop', 'número pop', 'num pop']],
+  ['processoSei', 'Nº PROCESSO SEI', ['processo sei', 'sei', 'processo', 'no processo sei']],
+  ['veiculo', 'MARCA / MODELO', ['marca modelo', 'veículo', 'modelo', 'marca']],
+  ['placa', 'PLACA', ['placas']],
+  ['cor', 'COR'],
+  ['endereco', 'ENDEREÇO', ['local']],
+  ['dataAdesivamento', 'DATA ADESIVAMENTO', ['adesivamento'], true],
+  ['intimacao', 'DATA INTIMAÇÃO', ['intimação'], true],
+  ['vistoria1', 'DATA 1ª VISTORIA', ['1ª vistoria', 'data 1a vistoria', '1a vistoria'], true],
+  ['ultimaVistoria', 'DATA ÚLTIMA VISTORIA', ['última vistoria'], true],
+  ['dataApreensao', 'DATA APREENSÃO', ['data apreens.', 'apreensão'], true],
+  ['situacao', 'SITUAÇÃO', ['status']],
+  ['observacao', 'OBS', ['observação']],
+  ['id', 'ID do documento'],
+  ['createdAt', 'createdAt'],
+  ['updatedAt', 'updatedAt']
+];
+
+function normalizeImportHeader(value){
+  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036fªº°]/g, '')
+    .toLowerCase().replace(/\s*\/\s*/g, ' / ').replace(/\s+/g, ' ').trim();
+}
+
+function readVehicleRows(workbook){
+  const sheetName = workbook.SheetNames.find(name => normalizeImportHeader(name) === 'veiculos') || workbook.SheetNames[0];
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {defval:'', header:1, raw:true});
+  const importColumns = [
+    ...VEHICLE_COLUMNS.slice(0, -3),
+    ['cidade', 'CIDADE', ['cidade / estado', 'cidade estado', 'município']]
+  ];
+  const names = importColumns.map(([key, label, aliases = []]) =>
+    [label, ...aliases, key].map(normalizeImportHeader));
+  const candidates = rows.slice(0, 15).map(row => {
+    const headers = row.map(normalizeImportHeader);
+    return names.map(column => column.map(name => headers.indexOf(name)).find(index => index >= 0) ?? -1);
+  });
+  const identifiers = ['pop', 'placa', 'veiculo'].map(key => importColumns.findIndex(column => column[0] === key));
+  const score = columns => identifiers.some(index => columns[index] >= 0) ? columns.filter(index => index >= 0).length : 0;
+  const headerIndex = candidates.reduce((best, columns, index) => score(columns) > (best < 0 ? 0 : score(candidates[best])) ? index : best, -1);
+  if(headerIndex < 0) throw new Error('Cabeçalho não encontrado. Use Nº POP, PLACA ou MARCA / MODELO.');
+  const date1904 = !!workbook.Workbook?.WBProps?.date1904;
+  const sheetStart = XLSX.utils.decode_range(workbook.Sheets[sheetName]['!ref']).s.r;
+  const today = todayISO();
+  return rows.slice(headerIndex + 1).flatMap((row, offset) => {
+    const cells = candidates[headerIndex].map(index => String(row[index] ?? '').trim());
+    if(!identifiers.some(index => cells[index])) return [];
+    const vehicle = Object.fromEntries(importColumns.map(([key, label, , isDate], index) => {
+      const value = cells[index];
+      if(!isDate || !value) return [key, value || null];
+      const date = parseDateCell(value, date1904);
+      if(!date) throw new Error(`Data inválida em ${label}, linha ${sheetStart + headerIndex + offset + 2}: ${value}`);
+      return [key, date];
+    }));
+    vehicle.processoSei = extractSei(vehicle.observacao, vehicle.processoSei);
+    vehicle.situacao = vehicle.situacao || 'NO LOCAL';
+    return [{...vehicle, id:uid(), createdAt:today, updatedAt:today}];
+  });
+}
 function parseDateCell(val, date1904 = false){
   if(val === null || val === undefined || val === '') return null;
   const calendarISO = (y,m,d) => {
@@ -924,9 +984,9 @@ function parseDateCell(val, date1904 = false){
   if(match) return calendarISO(+match[1],+match[2],+match[3]);
   if(!/^\d+(?:\.\d+)?$/.test(s)) return null;
   const serial = Number(s);
-  if(!Number.isFinite(serial) || serial <= 0) return null;
+  if(!Number.isFinite(serial) || serial < (date1904 ? 0 : 1)) return null;
   // Excel stores calendar dates as serials, not timezone-dependent instants.
-  const parts = XLSX.SSF.parse_date_code(Math.floor(serial + 1e-8), {date1904});
+  const parts = XLSX.SSF.parse_date_code(Math.floor(serial), {date1904});
   return parts ? calendarISO(parts.y,parts.m,parts.d) : null;
 }
 
@@ -936,114 +996,9 @@ function handleImportFile(file){
   reader.onload = function(e){
     try {
       const data = new Uint8Array(e.target.result);
-      // Ler sem cellDates para receber datas como numero serial do Excel
-      const workbook = XLSX.read(data, { type: 'array' });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-
-      // Ler como array de arrays para detectar a linha de cabecalho real
-      const allRows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', header: 1 });
-
-      if(!allRows || allRows.length === 0){
-        showToast("Nenhum dado encontrado na planilha.");
-        return;
-      }
-
-      // Encontrar a linha do cabecalho: a linha com maior numero de celulas preenchidas
-      let headerRowIdx = 0;
-      let maxFilled = 0;
-      for(let i = 0; i < Math.min(15, allRows.length); i++){
-        const filled = allRows[i].filter(c => String(c).trim() !== '').length;
-        if(filled > maxFilled){ maxFilled = filled; headerRowIdx = i; }
-      }
-
-      // Normalizar cabecalhos: minusculo, sem acentos, espacos simples
-      // Normalizar strings: minusculo, sem acentos, ordinal, espacos simples
-      function normStr(str){
-        if(!str) return '';
-        let s = String(str).trim().toLowerCase();
-        // Remover diacriticos via decomposicao NFD
-        s = s.normalize('NFD');
-        // Remover combining diacritical marks (U+0300 a U+036F) - char por char
-        let result = '';
-        for(let i = 0; i < s.length; i++){
-          const code = s.charCodeAt(i);
-          // Pular combining diacritical marks (0x0300-0x036F)
-          if(code >= 0x0300 && code <= 0x036F) continue;
-          // Pular ordinal masculino (0xBA = 186), feminino (0xAA = 170), grau (0xB0 = 176)
-          if(code === 0xBA || code === 0xAA || code === 0xB0) continue;
-          // Manter apenas ASCII imprimivel (0x20-0x7E)
-          if(code > 0x7E && code !== 0x20) continue;
-          result += s[i];
-        }
-        return result.replace(/\s+/g, ' ').trim();
-      }
-
-      const headers = allRows[headerRowIdx].map(h => normStr(h));
-
-      const dataRows = allRows.slice(headerRowIdx + 1);
-
-      function getColFromRow(rowArr, ...names){
-        for(const n of names){
-          const normName = normStr(n);
-          const idx = headers.findIndex(h => {
-            if(h === normName) return true;
-            if(h.includes(normName) && normName.length >= 4) return true;
-            if(normName.includes(h) && h.length >= 4) return true;
-            return false;
-          });
-          if(idx >= 0 && rowArr[idx] !== undefined && String(rowArr[idx]).trim() !== ''){
-            return String(rowArr[idx]).trim();
-          }
-        }
-        return null;
-      }
-
-      function xlSerialToISO(val){
-        return parseDateCell(val, !!workbook.Workbook?.WBProps?.date1904);
-      }
-
-            const parsedVehicles = dataRows.map(row => {
-        const pop         = getColFromRow(row, 'no pop', 'n pop', 'pop', 'numero pop', 'num pop');
-        const placa       = getColFromRow(row, 'placa', 'placas');
-        const veiculo     = getColFromRow(row, 'marca /  modelo', 'marca / modelo', 'marca/modelo', 'marca modelo', 'veiculo', 'modelo', 'marca');
-        const dem         = getColFromRow(row, 'demanda', 'dem', 'no demanda', 'n demanda');
-        const processoSei = getColFromRow(row, 'processo sei', 'sei', 'no processo sei', 'processo');
-        const cor         = getColFromRow(row, 'cor');
-        const endereco    = getColFromRow(row, 'endereco', 'local');
-        const cidade      = getColFromRow(row, 'cidade/estado', 'cidade / estado', 'cidade estado', 'cidade', 'municipio');
-        const situacao    = getColFromRow(row, 'situacao', 'status') || 'NO LOCAL';
-        const observacao  = getColFromRow(row, 'observacao', 'obs');
-        const origemDenuncia = getColFromRow(row, 'origem denuncia', 'origem');
-
-        const dataAdesivamento = xlSerialToISO(getColFromRow(row, 'data adesivamento', 'adesivamento'));
-        const intimacao        = xlSerialToISO(getColFromRow(row, 'data intimacao', 'intimacao'));
-        const vistoria1        = xlSerialToISO(getColFromRow(row, 'data 1a vistoria', '1a vistoria', 'data 1 vistoria', 'vistoria1'));
-        const ultimaVistoria   = xlSerialToISO(getColFromRow(row, 'data ultima vistoria', 'ultima vistoria'));
-        const dataApreensao    = xlSerialToISO(getColFromRow(row, 'data apreens.', 'data apreensao', 'apreensao'));
-
-        return {
-          id: uid(),
-          dem,
-          pop,
-          processoSei: extractSei(observacao, processoSei),
-          veiculo,
-          placa,
-          cor,
-          endereco,
-          cidade,
-          dataAdesivamento,
-          intimacao,
-          vistoria1,
-          ultimaVistoria,
-          dataApreensao,
-          situacao,
-          origemDenuncia,
-          observacao,
-          createdAt: todayISO(),
-          updatedAt: todayISO()
-        };
-      }).filter(v => v.pop || v.placa || v.veiculo);
-
+      // Keep Excel serials and CSV text unchanged until the column is identified.
+      const workbook = XLSX.read(data, {type:'array', cellDates:false, raw:true});
+      const parsedVehicles = readVehicleRows(workbook);
       if(parsedVehicles.length === 0){
         showToast("Nenhum registro valido encontrado. Verifique se a planilha tem as colunas: Nº POP, PLACA ou MARCA/MODELO.");
         return;
@@ -1220,8 +1175,7 @@ function renderView(){
 
 
 const PROCESS_STATUSES = ['respondido', 'na caixa', 'aguardando vistoria'];
-const PROCESS_ORIGINS = ['Ouvidoria', 'Vereador', 'Gabinete', 'MP'];
-const PROCESS_FIELDS = [['processoSei','Nº Processo SEI'],['dem','Nº Demanda'],['pop','Nº POP'],['endereco','Endereço'],['origemDenuncia','Origem da denúncia'],['dataRecebimento','Data recebimento'],['prazo','Prazo'],['dataResposta','Data resposta'],['status','Status']];
+const PROCESS_FIELDS = [['processoSei','Nº Processo SEI'],['dem','Nº Demanda'],['pop','Nº POP'],['endereco','Endereço'],['dataRecebimento','Data recebimento'],['prazo','Prazo'],['dataResposta','Data resposta'],['status','Status']];
 function processColor(value){
   return ({respondido:'retirado','na caixa':'apreendido','aguardando vistoria':'nolocal',Ouvidoria:'apreendido',Vereador:'retirado',Gabinete:'nolocal',MP:'process-mp'})[value] || 'outro';
 }
@@ -1232,7 +1186,7 @@ function processOptions(values, selected, emptyLabel){
 function normalizeProcessSearch(value){ return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,''); }
 function getFilteredProcesses(){
   const f=STATE.processFilters, q=normalizeProcessSearch(f.q);
-  const list=STATE.processes.filter(p=>(!f.origemDenuncia || p.origemDenuncia===f.origemDenuncia) && (!f.status || p.status===f.status) && (!q || PROCESS_FIELDS.some(([key])=>normalizeProcessSearch(p[key]).includes(q) || (key.startsWith('data') || key==='prazo') && normalizeProcessSearch(fmtBR(p[key])).includes(q))));
+  const list=STATE.processes.filter(p=>(!f.status || p.status===f.status) && (!q || PROCESS_FIELDS.some(([key])=>normalizeProcessSearch(p[key]).includes(q) || (key.startsWith('data') || key==='prazo') && normalizeProcessSearch(fmtBR(p[key])).includes(q))));
   if(f.sortBy) list.sort((a,b)=>{
     const av=a[f.sortBy] || '', bv=b[f.sortBy] || '';
     if(!av || !bv) return av ? -1 : bv ? 1 : 0;
@@ -1245,7 +1199,7 @@ function toggleProcessSort(key){
   f.sortDir=f.sortBy===key && f.sortDir==='asc' ? 'desc' : 'asc'; f.sortBy=key;
 }
 function processCell(p,key){
-  if(key==='origemDenuncia' || key==='status') return processTag(p[key]);
+  if(key==='status') return processTag(p[key]);
   return escapeHtml(key==='prazo' || key.startsWith('data') ? fmtBR(p[key]) : p[key] || '—');
 }
 function viewProcessos(){
@@ -1254,18 +1208,16 @@ function viewProcessos(){
   ${STATE.processError ? '<div class="alert-banner">Não foi possível carregar os processos: '+escapeHtml(STATE.processError)+'</div>' : ''}
   <div class="panel"><div class="formgrid">
   <div class="field"><label for="process-search">Buscar processos</label><input id="process-search" type="search" placeholder="Buscar em todas as colunas…" value="${escapeHtml(f.q)}"></div>
-  <div class="field"><label for="process-origin-filter">Origem da denúncia</label><select id="process-origin-filter">${processOptions(PROCESS_ORIGINS,f.origemDenuncia,'Todas as origens')}</select></div>
   <div class="field"><label for="process-status-filter">Status</label><select id="process-status-filter">${processOptions(PROCESS_STATUSES,f.status,'Todos os status')}</select></div>
   </div></div>
-  <div class="panel" style="overflow-x:auto"><table><thead><tr>${PROCESS_FIELDS.map(([key,label])=>['origemDenuncia','prazo','status'].includes(key)?`<th aria-sort="${f.sortBy===key?(f.sortDir==='asc'?'ascending':'descending'):'none'}"><button class="table-sort" type="button" data-process-sort="${key}">${label} ${f.sortBy===key?(f.sortDir==='asc'?'↑':'↓'):'↕'}</button></th>`:`<th>${label}</th>`).join('')}<th>Ações</th></tr></thead><tbody>
-  ${rows.map(p=>`<tr>${PROCESS_FIELDS.map(([key])=>`<td>${processCell(p,key)}</td>`).join('')}<td><div class="rowactions"><button class="btn-icon view" title="Visualizar ficha completa" aria-label="Visualizar processo" data-view-process="${escapeHtml(p.id)}">${ICONS.view}</button><button class="btn-icon edit" title="Editar processo" aria-label="Editar processo" data-edit-process="${escapeHtml(p.id)}">${ICONS.edit}</button><button class="btn-icon del" title="Excluir processo" aria-label="Excluir processo" data-delete-process="${escapeHtml(p.id)}">${ICONS.del}</button></div></td></tr>`).join('') || '<tr><td colspan="10">Nenhum processo encontrado.</td></tr>'}
+  <div class="panel" style="overflow-x:auto"><table><thead><tr>${PROCESS_FIELDS.map(([key,label])=>['prazo','status'].includes(key)?`<th aria-sort="${f.sortBy===key?(f.sortDir==='asc'?'ascending':'descending'):'none'}"><button class="table-sort" type="button" data-process-sort="${key}">${label} ${f.sortBy===key?(f.sortDir==='asc'?'↑':'↓'):'↕'}</button></th>`:`<th>${label}</th>`).join('')}<th>Ações</th></tr></thead><tbody>
+  ${rows.map(p=>`<tr>${PROCESS_FIELDS.map(([key])=>`<td>${processCell(p,key)}</td>`).join('')}<td><div class="rowactions"><button class="btn-icon view" title="Visualizar ficha completa" aria-label="Visualizar processo" data-view-process="${escapeHtml(p.id)}">${ICONS.view}</button><button class="btn-icon edit" title="Editar processo" aria-label="Editar processo" data-edit-process="${escapeHtml(p.id)}">${ICONS.edit}</button><button class="btn-icon del" title="Excluir processo" aria-label="Excluir processo" data-delete-process="${escapeHtml(p.id)}">${ICONS.del}</button></div></td></tr>`).join('') || '<tr><td colspan="9">Nenhum processo encontrado.</td></tr>'}
   </tbody></table></div>`;
 }
 async function saveProcess(data,id=null){
   if(!processosCol) throw new Error('Firebase indisponível. Tente reconectar.');
   if(!data.processoSei || !data.processoSei.trim()) throw new Error('Informe o nº do processo SEI.');
   if(!PROCESS_STATUSES.includes(data.status)) throw new Error('Status inválido.');
-  if(data.origemDenuncia && !PROCESS_ORIGINS.includes(data.origemDenuncia)) throw new Error('Selecione uma origem da denúncia válida.');
   const process={...data,processoSei:formatSei(data.processoSei),updatedAt:todayISO()};
   if(id) await processosCol.doc(id).set(process,{merge:true});
   else await processosCol.doc(uid()).set({...process,createdAt:todayISO()});
@@ -1273,10 +1225,9 @@ async function saveProcess(data,id=null){
 function processFormHTML(p={}){
   return `<form id="form-process"><div class="formgrid">${PROCESS_FIELDS.map(([key,label])=>{
     let input;
-    if(key==='status' || key==='origemDenuncia'){
-      const values=key==='status'?PROCESS_STATUSES:PROCESS_ORIGINS;
-      const value=p[key] || (key==='status'?'na caixa':'');
-      input=`<select id="process-${key}" name="${key}" class="tag ${processColor(value)}">${processOptions(values,value,key==='origemDenuncia'?'Selecione a origem':null)}</select>`;
+    if(key==='status'){
+      const value=p[key] || 'na caixa';
+      input=`<select id="process-${key}" name="${key}" class="tag ${processColor(value)}">${processOptions(PROCESS_STATUSES,value,null)}</select>`;
     }else input=`<input id="process-${key}" name="${key}" type="${key==='prazo' || key.startsWith('data')?'date':'text'}" ${key==='processoSei'?'required':''} value="${escapeHtml(p[key] || '')}">`;
     return `<div class="field"><label for="process-${key}">${label}</label>${input}</div>`;
   }).join('')}</div><button class="btn amber" type="submit">${p.id?'Salvar alterações':'Cadastrar processo'}</button> <button class="btn ghost" type="button" data-close-process>Cancelar</button><p id="process-feedback" role="status" class="hint"></p></form>`;
@@ -1320,7 +1271,7 @@ function bindProcessEvents(){
     catch(error){showToast('Erro ao excluir processo: '+error.message);button.disabled=false;}
   }));
   document.querySelectorAll('[data-process-sort]').forEach(button=>button.addEventListener('click',()=>{toggleProcessSort(button.getAttribute('data-process-sort'));render();}));
-  for(const [element,key] of [['process-origin-filter','origemDenuncia'],['process-status-filter','status']])document.getElementById(element)?.addEventListener('change',event=>{STATE.processFilters[key]=event.target.value;render();});
+  for(const [element,key] of [['process-status-filter','status']])document.getElementById(element)?.addEventListener('change',event=>{STATE.processFilters[key]=event.target.value;render();});
   document.getElementById('process-search')?.addEventListener('input',event=>{
     const input=event.target,position=input.selectionStart;STATE.processFilters.q=input.value;render();
     const replacement=document.getElementById('process-search');replacement.focus();if(position!==null)replacement.setSelectionRange(position,position);
@@ -1664,7 +1615,7 @@ function getFilteredVehicles(){
   const normalizedQuery = normalizeProcessSearch(query);
   if(query){
     list = list.filter(vehicle => Object.entries(vehicle).some(([field, value]) => {
-      if (field === 'vistoria2' || value == null) return false;
+      if (['vistoria2','baixaSgf','origemDenuncia'].includes(field) || value == null) return false;
       const raw = String(value);
       const candidates = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? [raw, fmtBR(raw)] : [raw];
       return candidates.some(candidate => normalizedQuery
@@ -1813,7 +1764,7 @@ async function addVehicle(data){
   const newV = Object.assign({
     id: uid(), dem:null, pop:null, processoSei:null, veiculo:null, placa:null, cor:null, endereco:null, cidade:null,
     dataAdesivamento:null, vistoria1:null, intimacao:null, ultimaVistoria:null,
-    dataApreensao:null, situacao:'NÃO VISTORIADO', origemDenuncia:null, observacao:null,
+    dataApreensao:null, situacao:'NÃO VISTORIADO', observacao:null,
     createdAt: todayISO(), updatedAt: todayISO()
   }, data);
   await syncVehicleToFirestore(newV);
@@ -1864,7 +1815,6 @@ function openDetailsModal(id){
           <div class="detail-item"><span class="lbl">Nº Demanda / Ofício</span><span class="val mono">${escapeHtml(v.dem||'—')}</span></div>
           <div class="detail-item"><span class="lbl">Nº Processo SEI</span><span class="val mono">${escapeHtml(sei)}</span></div>
           <div class="detail-item"><span class="lbl">Nº POP</span><span class="val mono">${escapeHtml(v.pop||'—')}</span></div>
-          <div class="detail-item"><span class="lbl">Origem da Denúncia</span><span class="val">${escapeHtml(v.origemDenuncia||'—')}</span></div>
         </div>
       </div>
 
@@ -1964,7 +1914,7 @@ function openEditModal(id){
   });
 }
 
-function firestoreSheet(snapshot){
+function firestoreSheet(snapshot, columns){
   const records = snapshot.docs.map(doc => [doc.id, doc.data()]);
   const byPop = new Intl.Collator('pt-BR', {numeric:true, sensitivity:'base'});
   records.sort(([, first], [, second]) => {
@@ -1972,16 +1922,14 @@ function firestoreSheet(snapshot){
     const b = String(second.pop ?? '').trim();
     return Number(!a) - Number(!b) || byPop.compare(a, b);
   });
-  const fields = [...new Set(records.flatMap(([, data]) => Object.keys(data)))].filter(field => field !== 'vistoria2').sort();
-  const rows = records.map(([id, data]) => [id, ...fields.map(field => {
-    if (!Object.prototype.hasOwnProperty.call(data, field)) return '';
-    const value = data[field];
-    if (value == null) return '';
-    if (typeof value.toDate === 'function') return value.toDate().toISOString();
-    if (typeof value === 'object') return JSON.stringify(value);
-    return value;
-  })]);
-  return XLSX.utils.aoa_to_sheet([['ID do documento', ...fields.map(field => field === 'vistoria1' ? 'Data 1ª Vistoria' : field)], ...rows]);
+  const rows = records.map(([id, data]) => columns.map(([key, , , isDate]) => {
+    const value = key === 'id' ? id : data[key];
+    if(value == null || value === '') return '';
+    if(isDate) return fmtBR(value);
+    if(typeof value.toDate === 'function') return value.toDate().toISOString();
+    return typeof value === 'object' ? JSON.stringify(value) : value;
+  }));
+  return XLSX.utils.aoa_to_sheet([columns.map(([, label]) => label), ...rows]);
 }
 
 async function exportDatabaseExcel(button){
@@ -1994,8 +1942,8 @@ async function exportDatabaseExcel(button){
       processosCol.get({ source: 'server' })
     ]);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, firestoreSheet(vehicles), 'Veículos');
-    XLSX.utils.book_append_sheet(workbook, firestoreSheet(processes), 'Processos');
+    XLSX.utils.book_append_sheet(workbook, firestoreSheet(vehicles, VEHICLE_COLUMNS), 'Veículos');
+    XLSX.utils.book_append_sheet(workbook, firestoreSheet(processes, [...PROCESS_FIELDS.map(column => [...column, [], column[0].startsWith('data') || column[0] === 'prazo']), ['id','ID do documento'], ['createdAt','createdAt'], ['updatedAt','updatedAt']]), 'Processos');
     XLSX.writeFile(workbook, `controle_pop_${todayISO()}.xlsx`);
     showToast('Planilha Excel exportada.');
   } catch (error) {
@@ -2005,18 +1953,14 @@ async function exportDatabaseExcel(button){
   }
 }
 
-function exportCSV(rows, field){
-  const headers = ['POP','Nº Demanda','Nº Processo SEI','Marca / Modelo','Placa','Cor','Endereço','Cidade','Data Adesivamento','Data Intimação','Data 1ª Vistoria','Última Vistoria','Data Apreensão','Situação','Origem Denúncia','Observação'];
-  const keys = ['pop','dem','processoSei','veiculo','placa','cor','endereco','cidade','dataAdesivamento','intimacao','vistoria1','ultimaVistoria','dataApreensao','situacao','origemDenuncia','observacao'];
-  const lines = [headers.join(';')];
-  rows.forEach(v => {
-    const line = keys.map(k => {
-      let val = v[k] || (k==='processoSei' ? extractSei(v.observacao) : '') || '';
-      if(['dataAdesivamento','intimacao','vistoria1','ultimaVistoria','dataApreensao'].includes(k)) val = fmtBR(val)==='—' ? '' : fmtBR(val);
-      val = String(val).replace(/;/g,',').replace(/\n/g,' ');
-      return val;
-    });
-    lines.push(line.join(';'));
+function exportCSV(rows){
+  const csvCell = value => '"' + String(value ?? '').replace(/"/g, '""') + '"';
+  const lines = [VEHICLE_COLUMNS.map(([, label]) => csvCell(label)).join(';')];
+  rows.forEach(vehicle => {
+    lines.push(VEHICLE_COLUMNS.map(([key, , , isDate]) => {
+      const value = vehicle[key] || (key === 'processoSei' ? extractSei(vehicle.observacao) : '');
+      return csvCell(isDate && value ? fmtBR(value) : value);
+    }).join(';'));
   });
   const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
@@ -2231,7 +2175,7 @@ function bindEvents(){
   const btnCsv = document.getElementById('btn-export-csv');
   const btnExcel = document.getElementById('btn-export-excel');
   if(btnExcel) btnExcel.addEventListener('click', () => exportDatabaseExcel(btnExcel));
-  if(btnCsv) btnCsv.addEventListener('click', ()=> exportCSV(STATE.report.results, STATE.report.field));
+  if(btnCsv) btnCsv.addEventListener('click', ()=> exportCSV(STATE.report.results));
   const btnPrint = document.getElementById('btn-print');
   if(btnPrint) btnPrint.addEventListener('click', ()=> window.print());
 }
