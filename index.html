@@ -1966,6 +1966,12 @@ function openEditModal(id){
 
 function firestoreSheet(snapshot){
   const records = snapshot.docs.map(doc => [doc.id, doc.data()]);
+  const byPop = new Intl.Collator('pt-BR', {numeric:true, sensitivity:'base'});
+  records.sort(([, first], [, second]) => {
+    const a = String(first.pop ?? '').trim();
+    const b = String(second.pop ?? '').trim();
+    return Number(!a) - Number(!b) || byPop.compare(a, b);
+  });
   const fields = [...new Set(records.flatMap(([, data]) => Object.keys(data)))].filter(field => field !== 'vistoria2').sort();
   const rows = records.map(([id, data]) => [id, ...fields.map(field => {
     if (!Object.prototype.hasOwnProperty.call(data, field)) return '';
